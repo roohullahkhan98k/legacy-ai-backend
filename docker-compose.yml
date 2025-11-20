@@ -45,6 +45,7 @@ services:
     container_name: ai-prototype-backend
     ports:
       - "3000:3000"
+      - "5000:5000"
     volumes:
       - ./uploads:/app/uploads
       - ./.env:/app/.env

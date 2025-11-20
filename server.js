@@ -141,6 +141,33 @@ app.use((err, req, res, next) => {
 const aiInterviewSocket = new AIInterviewSocket();
 aiInterviewSocket.initialize();
 
+// WebSocket health check endpoint
+app.get('/api/socket/status', (req, res) => {
+  try {
+    const socketStatus = {
+      status: aiInterviewSocket.clientServer ? 'running' : 'stopped',
+      port: aiInterviewSocket.CLIENT_PORT,
+      activeConnections: aiInterviewSocket.clientServer ? aiInterviewSocket.clientServer.clients.size : 0,
+      activeInterviews: aiInterviewSocket.activeInterviews ? aiInterviewSocket.activeInterviews.size : 0,
+      timestamp: new Date().toISOString()
+    };
+    
+    res.json({
+      success: true,
+      websocket: socketStatus,
+      message: socketStatus.status === 'running' 
+        ? `WebSocket server is running on port ${socketStatus.port} with ${socketStatus.activeConnections} active connection(s)` 
+        : 'WebSocket server is not running'
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      message: 'Failed to check WebSocket status'
+    });
+  }
+});
+
 // Graceful shutdown
 process.on('SIGINT', () => {
   console.log('\n🛑 Shutting down gracefully...');
