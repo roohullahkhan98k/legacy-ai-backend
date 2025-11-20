@@ -2,16 +2,50 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 
-// Ensure uploads directory exists
-const uploadsDir = path.join(process.cwd(), 'uploads', 'users');
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
+// Get uploads directory - use absolute path to avoid issues
+const uploadsDir = path.resolve(process.cwd(), 'uploads', 'users');
+
+// Log the actual path being used
+console.log(`📁 Upload directory path: ${uploadsDir}`);
+console.log(`📁 Current working directory: ${process.cwd()}`);
+
+// Ensure uploads directory exists at module load
+try {
+  if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+    console.log(`✅ Created upload directory at module load: ${uploadsDir}`);
+  } else {
+    console.log(`✅ Upload directory already exists: ${uploadsDir}`);
+  }
+} catch (error) {
+  console.error(`❌ Failed to create upload directory at module load: ${uploadsDir}`, error);
 }
 
 // Configure multer for profile picture uploads
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, uploadsDir);
+    // Ensure directory exists every time (handles race conditions and volume mounts)
+    try {
+      const dirToCheck = path.resolve(process.cwd(), 'uploads', 'users');
+      if (!fs.existsSync(dirToCheck)) {
+        fs.mkdirSync(dirToCheck, { recursive: true });
+        console.log(`✅ Created upload directory in destination callback: ${dirToCheck}`);
+      }
+      // Verify we can write to the directory
+      const testFile = path.join(dirToCheck, '.write-test');
+      try {
+        fs.writeFileSync(testFile, 'test');
+        fs.unlinkSync(testFile);
+        console.log(`✅ Directory is writable: ${dirToCheck}`);
+      } catch (writeError) {
+        console.error(`❌ Directory is not writable: ${dirToCheck}`, writeError);
+        return cb(new Error(`Upload directory is not writable: ${writeError.message}`));
+      }
+      cb(null, dirToCheck);
+    } catch (error) {
+      console.error(`❌ Failed to ensure upload directory exists: ${uploadsDir}`, error);
+      cb(new Error(`Failed to create upload directory: ${error.message}`));
+    }
   },
   filename: (req, file, cb) => {
     // Generate unique filename: timestamp + random string + original extension
@@ -63,7 +97,30 @@ const handleProfilePictureUpload = (req, res, next) => {
   uploadProfilePicture(req, res, (err) => {
     // Log after multer processes the request
     console.log('📋 Request body keys:', req.body ? Object.keys(req.body) : 'Body not available');
-    console.log('📁 Request file:', req.file ? 'File received' : 'No file');
+    if (req.file) {
+      console.log('📁 Request file received:', {
+        filename: req.file.filename,
+        path: req.file.path,
+        size: req.file.size,
+        mimetype: req.file.mimetype
+      });
+      // Verify file was actually written
+      if (req.file.path) {
+        const fileExists = fs.existsSync(req.file.path);
+        console.log(`📁 File exists check: ${fileExists ? '✅ EXISTS' : '❌ MISSING'} - ${req.file.path}`);
+        if (!fileExists) {
+          console.error(`❌ File was not written to disk: ${req.file.path}`);
+          console.error(`❌ Directory exists: ${fs.existsSync(path.dirname(req.file.path))}`);
+          console.error(`❌ Directory is writable: ${fs.accessSync ? 'checking...' : 'unknown'}`);
+          return res.status(500).json({
+            success: false,
+            message: 'File upload failed: file was not saved to disk'
+          });
+        }
+      }
+    } else {
+      console.log('📁 Request file: No file');
+    }
     if (err instanceof multer.MulterError) {
       if (err.code === 'LIMIT_FILE_SIZE') {
         return res.status(400).json({

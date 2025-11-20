@@ -18,8 +18,16 @@ RUN npm install --omit=dev --legacy-peer-deps --no-audit
 # Copy application code
 COPY . .
 
-# Create uploads directory
-RUN mkdir -p uploads/avatars uploads/multimedia uploads/voice-samples uploads/users
+# Create uploads directory and all subdirectories
+RUN mkdir -p uploads/avatars/models \
+    uploads/avatars/lipsync \
+    uploads/avatars/images \
+    uploads/avatars/audio \
+    uploads/graphservice-media \
+    uploads/multimedia/images \
+    uploads/multimedia/videos \
+    uploads/users \
+    uploads/voice-samples
 
 # Expose port
 EXPOSE 3000
