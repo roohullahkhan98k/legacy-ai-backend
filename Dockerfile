@@ -13,12 +13,13 @@ RUN apt-get update \
 # Install Rhubarb Lip Sync
 RUN mkdir -p /opt/rhubarb \
   && cd /opt/rhubarb \
-  && wget -q https://github.com/DanielSWolf/rhubarb-lip-sync/releases/download/v1.14.0/rhubarb-lip-sync-1.14.0-linux.tar.gz \
+  && wget https://github.com/DanielSWolf/rhubarb-lip-sync/releases/download/v1.14.0/rhubarb-lip-sync-1.14.0-linux.tar.gz \
   && tar -xzf rhubarb-lip-sync-1.14.0-linux.tar.gz \
+  && ls -la rhubarb-lip-sync-1.14.0-linux \
   && mv rhubarb-lip-sync-1.14.0-linux/rhubarb /usr/local/bin/rhubarb \
   && chmod +x /usr/local/bin/rhubarb \
-  && rm -rf /opt/rhubarb rhubarb-lip-sync-1.14.0-linux.tar.gz \
-  && rhubarb --version || echo "Rhubarb installed"
+  && rhubarb --version \
+  && rm -rf /opt/rhubarb rhubarb-lip-sync-1.14.0-linux.tar.gz
 
 # Set working directory
 WORKDIR /app
