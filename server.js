@@ -5,6 +5,10 @@ const dotenv = require('dotenv');
 // Load environment variables
 dotenv.config();
 
+// Ensure all upload directories exist on server startup
+const { ensureUploadDirectories } = require('./common/utils/ensureUploadDirs');
+ensureUploadDirectories();
+
 console.log('🔍 Loading AI Prototype app...');
 // Import AI Prototype app
 const { startApp } = require('./app');
