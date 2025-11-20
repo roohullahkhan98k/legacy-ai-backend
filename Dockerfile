@@ -17,6 +17,8 @@ RUN mkdir -p /opt/rhubarb \
   && unzip Rhubarb-Lip-Sync-1.14.0-Linux.zip \
   && ls -la Rhubarb-Lip-Sync-1.14.0-Linux \
   && mv Rhubarb-Lip-Sync-1.14.0-Linux/rhubarb /usr/local/bin/rhubarb \
+  && mkdir -p /usr/local/bin/res \
+  && cp -r Rhubarb-Lip-Sync-1.14.0-Linux/res/* /usr/local/bin/res/ \
   && chmod +x /usr/local/bin/rhubarb \
   && rhubarb --version \
   && rm -rf /opt/rhubarb Rhubarb-Lip-Sync-1.14.0-Linux.zip
