@@ -167,8 +167,15 @@ const startAudioToLipsync = handleAsync(async (req, res) => {
     const compatibleAudioPath = await ensureRhubarbCompatible(req.file.path);
     console.log('✅ [AUDIO] Audio prepared for Rhubarb:', compatibleAudioPath);
 
-    // Hardcoded path - works reliably
-    const rhubarbCmd = 'C:\\Tools\\rhubarb\\Rhubarb-Lip-Sync-1.14.0-Windows\\rhubarb.exe';
+    // Get Rhubarb command from environment variable
+    const rhubarbCmd = process.env.RHUBARB_CMD;
+    if (!rhubarbCmd) {
+      const errorMsg = 'RHUBARB_CMD environment variable is not set. Please configure it in your .env file.';
+      console.error('❌ [RHUBARB]', errorMsg);
+      updateJob(job.id, { status: 'failed', error: errorMsg });
+      return res.status(500).json({ error: errorMsg });
+    }
+
     const args = ['-f', 'json', '-o', lipsyncOutPath, compatibleAudioPath];
     console.log('🎵 [RHUBARB] Starting lipsync generation:', { cmd: rhubarbCmd, args, outputPath: lipsyncOutPath });
     
