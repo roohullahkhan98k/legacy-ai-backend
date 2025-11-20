@@ -54,6 +54,7 @@ services:
       - DB_PORT=5432
       - CHROMA_HOST=http://chromadb:8000
       - CHROMA_URL=http://chromadb:8000
+      - RHUBARB_CMD=/usr/local/bin/rhubarb
     depends_on:
       - postgres
       - chromadb

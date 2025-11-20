@@ -1,4 +1,5 @@
 const path = require('path');
+const fs = require('fs');
 const { spawn } = require('child_process');
 const { randomUUID } = require('crypto');
 const { uploadImage, uploadAudio, paths } = require('../middleware/upload');
@@ -167,10 +168,18 @@ const startAudioToLipsync = handleAsync(async (req, res) => {
     const compatibleAudioPath = await ensureRhubarbCompatible(req.file.path);
     console.log('✅ [AUDIO] Audio prepared for Rhubarb:', compatibleAudioPath);
 
-    // Get Rhubarb command from environment variable
-    const rhubarbCmd = process.env.RHUBARB_CMD;
+    // Get Rhubarb command from environment variable, with fallback for Docker
+    const rhubarbCmd = process.env.RHUBARB_CMD || '/usr/local/bin/rhubarb';
     if (!rhubarbCmd) {
       const errorMsg = 'RHUBARB_CMD environment variable is not set. Please configure it in your .env file.';
+      console.error('❌ [RHUBARB]', errorMsg);
+      updateJob(job.id, { status: 'failed', error: errorMsg });
+      return res.status(500).json({ error: errorMsg });
+    }
+    
+    // Verify Rhubarb executable exists
+    if (!fs.existsSync(rhubarbCmd)) {
+      const errorMsg = `Rhubarb executable not found at: ${rhubarbCmd}. Please install Rhubarb or set RHUBARB_CMD to the correct path.`;
       console.error('❌ [RHUBARB]', errorMsg);
       updateJob(job.id, { status: 'failed', error: errorMsg });
       return res.status(500).json({ error: errorMsg });

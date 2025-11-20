@@ -1,10 +1,24 @@
 # Node.js Backend Dockerfile
 FROM node:18-bullseye
 
-# Install FFmpeg for audio processing
+# Install FFmpeg and dependencies for audio processing
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends ffmpeg \
+  && apt-get install -y --no-install-recommends \
+    ffmpeg \
+    wget \
+    unzip \
+    curl \
   && rm -rf /var/lib/apt/lists/*
+
+# Install Rhubarb Lip Sync
+RUN mkdir -p /opt/rhubarb \
+  && cd /opt/rhubarb \
+  && wget -q https://github.com/DanielSWolf/rhubarb-lip-sync/releases/download/v1.14.0/rhubarb-lip-sync-1.14.0-linux.tar.gz \
+  && tar -xzf rhubarb-lip-sync-1.14.0-linux.tar.gz \
+  && mv rhubarb-lip-sync-1.14.0-linux/rhubarb /usr/local/bin/rhubarb \
+  && chmod +x /usr/local/bin/rhubarb \
+  && rm -rf /opt/rhubarb rhubarb-lip-sync-1.14.0-linux.tar.gz \
+  && rhubarb --version || echo "Rhubarb installed"
 
 # Set working directory
 WORKDIR /app
