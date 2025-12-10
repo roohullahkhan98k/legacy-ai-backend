@@ -3,6 +3,7 @@ const { UserVoice, GeneratedAudio } = require('../models/VoiceCloning');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs').promises;
+const { Op } = require('sequelize');
 
 class VoiceCloningController {
   constructor() {
@@ -70,7 +71,7 @@ class VoiceCloningController {
           });
         }
 
-        const { voiceName, description } = req.body;
+        const { voiceName, description, accent } = req.body;
         
         if (!voiceName) {
           return res.status(400).json({
@@ -83,12 +84,13 @@ class VoiceCloningController {
           // Read the uploaded file
           const audioBuffer = await fs.readFile(req.file.path);
           
-          // Clone the voice - pass the original MIME type
+          // Clone the voice - pass the original MIME type and accent
           const result = await this.voiceService.cloneVoice(
             audioBuffer, 
             voiceName, 
             description, 
-            req.file.mimetype
+            req.file.mimetype,
+            accent || 'en' // Default to English if not specified
           );
           
           // Save to PostgreSQL
@@ -103,10 +105,13 @@ class VoiceCloningController {
                 user_id: userId,
                 voice_id: voiceIdToSave,
                 voice_name: voiceName,
-                sample_file_path: `/uploads/voice-samples/${req.file.filename}`,
+                sample_file_path: result.sampleFilePath || `/uploads/voice-samples/${req.file.filename}`,
+                accent: result.accent || accent || 'en',
+                is_local_only: true, // All new clones are local-only
                 metadata: {
                   description: description || '',
-                  elevenlabs_data: result
+                  accent: result.accent || accent || 'en',
+                  isLocalClone: true
                 }
               });
               console.log('✅ Voice saved to DB - user:', userId, 'voice_id:', voiceIdToSave);
@@ -151,7 +156,7 @@ class VoiceCloningController {
   // Generate speech from text using a voice
   async generateSpeech(req, res) {
     try {
-      const { text, voiceId, modelId, outputFormat, voiceSettings } = req.body;
+      const { text, voiceId, modelId, outputFormat, voiceSettings, accent } = req.body;
       
       if (!text) {
         return res.status(400).json({
@@ -170,7 +175,8 @@ class VoiceCloningController {
       const options = {
         modelId,
         outputFormat,
-        voiceSettings
+        voiceSettings,
+        accent: accent || 'en' // Pass accent for multilingual support
       };
 
       const result = await this.voiceService.generateSpeech(text, voiceId, options);
@@ -187,6 +193,7 @@ class VoiceCloningController {
             user_id: userId,
             voice_id: voiceId,
             voice_name: req.body.voiceName || 'Unknown Voice',
+            accent: result.accent || accent || 'en',
             text: text.substring(0, 500), // Store first 500 chars
             audio_file_path: result.audioPath,
             duration_seconds: result.duration || null,
@@ -194,7 +201,9 @@ class VoiceCloningController {
             metadata: {
               model_id: modelId,
               output_format: outputFormat,
-              voice_settings: voiceSettings
+              voice_settings: voiceSettings,
+              accent: result.accent || accent || 'en',
+              isLocalClone: result.isLocalClone || false
             }
           });
           console.log('✅ Generated audio saved to DB for user:', userId, 'path:', result.audioPath);
@@ -310,28 +319,83 @@ class VoiceCloningController {
         });
       }
 
-      const result = await this.voiceService.deleteVoice(voiceId);
-      
-      // Delete from DB
       const userId = req.user?.id;
-      if (userId) {
-        try {
+      
+      // Check if this is a local voice (starts with "local_")
+      const isLocalVoice = voiceId && voiceId.startsWith('local_');
+      
+      if (isLocalVoice) {
+        // Local voice - only delete from DB and file system, not from ElevenLabs
+        console.log('🗑️ Deleting local voice (not in ElevenLabs):', voiceId);
+        
+        // Find the voice record to get file path
+        const voiceRecord = await UserVoice.findOne({
+          where: { 
+            voice_id: voiceId,
+            user_id: userId
+          }
+        });
+        
+        if (voiceRecord) {
+          // Delete the audio file from file system
+          if (voiceRecord.sample_file_path) {
+            try {
+              const fs = require('fs').promises;
+              const path = require('path');
+              const filePath = path.resolve(process.cwd(), voiceRecord.sample_file_path.replace(/^\//, ''));
+              await fs.unlink(filePath);
+              console.log('✅ Deleted local voice file:', filePath);
+            } catch (fileError) {
+              console.warn('⚠️ Failed to delete voice file (non-critical):', fileError.message);
+            }
+          }
+          
+          // Delete from DB
           await UserVoice.destroy({
             where: { 
               voice_id: voiceId,
-              user_id: userId  // Only delete if it belongs to this user
+              user_id: userId
             }
           });
-          console.log('✅ Voice deleted from DB for user:', userId);
-        } catch (dbError) {
-          console.warn('⚠️ Failed to delete voice from DB:', dbError.message);
+          console.log('✅ Local voice deleted from DB');
+        } else {
+          return res.status(404).json({
+            error: 'Voice not found',
+            message: 'Voice not found or does not belong to this user'
+          });
         }
+        
+        return res.json({
+          success: true,
+          voiceId: voiceId,
+          status: 'deleted',
+          isLocalVoice: true,
+          timestamp: new Date().toISOString()
+        });
+      } else {
+        // ElevenLabs voice - delete from ElevenLabs first, then from DB
+        const result = await this.voiceService.deleteVoice(voiceId);
+        
+        // Delete from DB
+        if (userId) {
+          try {
+            await UserVoice.destroy({
+              where: { 
+                voice_id: voiceId,
+                user_id: userId
+              }
+            });
+            console.log('✅ Voice deleted from DB for user:', userId);
+          } catch (dbError) {
+            console.warn('⚠️ Failed to delete voice from DB:', dbError.message);
+          }
+        }
+        
+        return res.json({
+          success: true,
+          ...result
+        });
       }
-      
-      res.json({
-        success: true,
-        ...result
-      });
     } catch (error) {
       res.status(500).json({
         error: 'Voice deletion failed',

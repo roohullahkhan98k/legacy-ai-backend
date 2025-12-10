@@ -27,12 +27,22 @@ const UserVoice = sequelize.define('user_voices', {
   sample_file_path: {
     type: DataTypes.STRING,
     allowNull: true,
-    comment: 'Path to original sample audio file'
+    comment: 'Path to original sample audio file (stored locally)'
+  },
+  accent: {
+    type: DataTypes.STRING(10),
+    allowNull: true,
+    comment: 'Accent/locale code (en, ar, hi, es, fr, de, etc.)'
+  },
+  is_local_only: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: true,
+    comment: 'True if voice clone is stored locally only (not in ElevenLabs)'
   },
   metadata: {
     type: DataTypes.JSONB,
     defaultValue: {},
-    comment: 'Voice settings, quality, etc.'
+    comment: 'Voice settings, quality, accent details, etc.'
   }
 }, {
   timestamps: true,
@@ -58,7 +68,12 @@ const GeneratedAudio = sequelize.define('generated_audio', {
   voice_id: {
     type: DataTypes.STRING,
     allowNull: false,
-    comment: 'Voice used (ElevenLabs ID or default)'
+    comment: 'Voice used (local voice ID or ElevenLabs ID)'
+  },
+  accent: {
+    type: DataTypes.STRING(10),
+    allowNull: true,
+    comment: 'Accent/locale used for generation (en, ar, hi, es, etc.)'
   },
   voice_name: {
     type: DataTypes.STRING,

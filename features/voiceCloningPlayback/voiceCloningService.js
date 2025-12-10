@@ -145,27 +145,44 @@ class VoiceCloningService {
     });
   }
 
-  // Clone voice from audio sample - EXACT same approach as test
-  async cloneVoice(audioBuffer, voiceName, description = '', originalMimeType = 'audio/webm') {
+  // Clone voice from audio sample - Store locally (not in ElevenLabs to avoid 30 limit)
+  // accent: 'en', 'ar', 'hi', 'es', 'fr', 'de', etc. (optional - will auto-detect if not provided)
+  async cloneVoice(audioBuffer, voiceName, description = '', originalMimeType = 'audio/webm', accent = null) {
     try {
       if (!this.apiKey) {
         throw new Error('ElevenLabs API key not configured');
       }
 
-      console.log('🎤 Starting voice cloning process...');
+      console.log('🎤 Starting voice cloning process (LOCAL STORAGE)...');
       console.log('📁 Audio buffer size:', audioBuffer.length, 'bytes');
       console.log('📁 Original MIME type:', originalMimeType);
+      
+      // Auto-detect accent if not provided (from voice name or description)
+      let detectedAccent = accent;
+      if (!detectedAccent) {
+        // Try to detect from voice name or description
+        const textToCheck = `${voiceName} ${description}`.toLowerCase();
+        const languageDetectionService = require('../../../common/services/LanguageDetectionService');
+        const detection = languageDetectionService.detectLanguage(textToCheck);
+        detectedAccent = detection.language || 'en';
+        console.log('🔍 Auto-detected accent from name/description:', detectedAccent);
+      } else {
+        console.log('🌍 Using provided accent:', detectedAccent);
+      }
       
       // Create a simple WAV file from your audio (EXACT same as test)
       const timestamp = Date.now();
       const testAudioPath = path.join(this.uploadsDir, `real_audio_${timestamp}.wav`);
       
-      // Save original audio with correct extension based on MIME type
+      // Save original audio locally (this is our voice clone - not stored in ElevenLabs)
       const originalExtension = originalMimeType.includes('m4a') ? '.m4a' : 
                                originalMimeType.includes('mp3') ? '.mp3' : 
                                originalMimeType.includes('wav') ? '.wav' : '.webm';
-      const originalFilepath = path.join(this.uploadsDir, `original_${timestamp}${originalExtension}`);
+      // Use a unique local ID instead of ElevenLabs voice_id
+      const localVoiceId = `local_${timestamp}_${Math.random().toString(36).substr(2, 9)}`;
+      const originalFilepath = path.join(this.uploadsDir, `voice_clone_${localVoiceId}${originalExtension}`);
       await fs.writeFile(originalFilepath, audioBuffer);
+      console.log('💾 Voice clone saved locally:', originalFilepath);
       
       // Convert to WAV using the same method as test
       await this.convertToWav(originalFilepath, testAudioPath);
@@ -182,177 +199,38 @@ class VoiceCloningService {
         finalAudioPath = trimmedPath;
       }
       
-      // Test API connection first
-      console.log('🧪 Testing API connection...');
-      const apiTest = await this.testApiConnection();
-      if (!apiTest) {
-        throw new Error('ElevenLabs API connection failed. Please check your API key and internet connection.');
-      }
-      
-      // Use EXACT same approach as working test
-      console.log('📤 Creating voice with ElevenLabs API (EXACT same as test)...');
-      console.log('  - Name:', voiceName);
-      console.log('  - File:', finalAudioPath);
-      
-      // Read the file as a buffer (EXACT same as test)
-      const fileBuffer = await fs.readFile(finalAudioPath);
-      
-      // Try IVC API first (EXACT same as test)
+      // Clean up temporary conversion files (keep original)
       try {
-        console.log('📤 Trying IVC API first...');
-        const voice = await this.client.voices.ivc.create({
-          name: voiceName,
-          files: [fileBuffer]
-        });
-        
-        // Log the full response to debug
-        console.log('📋 Full IVC API Response:', JSON.stringify(voice, null, 2));
-        
-        // Extract voice ID - SDK might return camelCase 'voiceId' or snake_case 'voice_id'
-        const voiceId = voice.voiceId || voice.voice_id || voice.id;
-        
-        if (!voiceId) {
-          console.error('❌ No voice ID found in IVC response!', voice);
-          throw new Error('Voice created but no voice ID returned');
-        }
-        
-        console.log('✅ Voice created successfully with IVC API:', voiceId);
-        console.log('📝 Voice Name:', voice.name || voiceName);
-        
-        // Verify the voice exists by fetching it
-        try {
-          console.log('🔍 Verifying voice exists...');
-          const verifiedVoice = await this.client.voices.get(voiceId);
-          console.log('✅ Voice verified:', verifiedVoice.name, '(ID:', voiceId, ')');
-          console.log('📊 Voice samples:', verifiedVoice.samples?.length || 0);
-        } catch (verifyError) {
-          console.warn('⚠️ Voice verification failed:', verifyError.message);
-        }
-        
-        // Clean up temporary files
-        try {
+        if (finalAudioPath !== originalFilepath) {
           await fs.unlink(finalAudioPath);
-          await fs.unlink(originalFilepath);
-          if (finalAudioPath !== testAudioPath) {
-            await fs.unlink(testAudioPath);
-          }
-        } catch (cleanupError) {
-          console.warn('Warning: Could not clean up temporary files:', cleanupError.message);
         }
-        
-        return {
-          voiceId: voiceId,
-          name: voice.name || voiceName,
-          status: 'cloned',
-          timestamp: new Date().toISOString()
-        };
-        
-      } catch (ivcError) {
-        console.log('❌ IVC API failed:', ivcError.message);
-        
-        // Try REST API as fallback (EXACT same as test)
-        console.log('📤 Trying REST API fallback...');
-        
-        // Use native FormData (Node.js 18+)
-        const form = new FormData();
-        
-        form.append('name', voiceName);
-        form.append('files', new Blob([fileBuffer], { type: 'audio/wav' }), 'real_audio.wav');
-        
-        // Debug: Log what we're sending
-        console.log('🔍 File buffer size:', fileBuffer.length);
-        console.log('🔍 Voice name:', voiceName);
-        
-        const response = await fetch('https://api.elevenlabs.io/v1/voices/add', {
-          method: 'POST',
-          headers: {
-            'xi-api-key': this.apiKey
-          },
-          body: form
-        });
-        
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error('❌ ElevenLabs API Error Response:', errorText);
-          console.error('❌ Response Status:', response.status);
-          console.error('❌ Response Headers:', Object.fromEntries(response.headers.entries()));
-          
-          // Clean up temporary files
-          try {
-            await fs.unlink(finalAudioPath);
-            await fs.unlink(originalFilepath);
-            if (finalAudioPath !== testAudioPath) {
-              await fs.unlink(testAudioPath);
-            }
-          } catch (cleanupError) {
-            console.warn('Warning: Could not clean up temporary files:', cleanupError.message);
-          }
-          
-          throw new Error(`Voice creation failed: ${response.status} ${response.statusText} - ${errorText}`);
+        if (finalAudioPath !== testAudioPath && testAudioPath !== originalFilepath) {
+          await fs.unlink(testAudioPath);
         }
-        
-        const voice = await response.json();
-        
-        // Log the full response to debug
-        console.log('📋 Full API Response:', JSON.stringify(voice, null, 2));
-        
-        // Extract voice ID - SDK might return camelCase 'voiceId' or snake_case 'voice_id'
-        const voiceId = voice.voiceId || voice.voice_id || voice.id;
-        
-        if (!voiceId) {
-          console.error('❌ No voice ID found in response!', voice);
-          throw new Error('Voice created but no voice ID returned. Response: ' + JSON.stringify(voice));
-        }
-        
-        console.log('✅ Voice created successfully with REST API:', voiceId);
-        console.log('📝 Voice Name:', voice.name || voiceName);
-        
-        // Verify the voice exists by fetching it
-        try {
-          console.log('🔍 Verifying voice exists...');
-          const verifyResponse = await fetch(`https://api.elevenlabs.io/v1/voices/${voiceId}`, {
-            method: 'GET',
-            headers: {
-              'xi-api-key': this.apiKey
-            }
-          });
-          
-          if (verifyResponse.ok) {
-            const verifiedVoice = await verifyResponse.json();
-            console.log('✅ Voice verified:', verifiedVoice.name, '(ID:', voiceId, ')');
-            console.log('📊 Voice samples:', verifiedVoice.samples?.length || 0);
-          } else {
-            console.warn('⚠️ Could not verify voice:', verifyResponse.status);
-          }
-        } catch (verifyError) {
-          console.warn('⚠️ Voice verification failed:', verifyError.message);
-        }
-        
-        // Clean up temporary files
-        try {
-          await fs.unlink(finalAudioPath);
-          await fs.unlink(originalFilepath);
-          if (finalAudioPath !== testAudioPath) {
-            await fs.unlink(testAudioPath);
-          }
-        } catch (cleanupError) {
-          console.warn('Warning: Could not clean up temporary files:', cleanupError.message);
-        }
-        
-        return {
-          voiceId: voiceId,
-          name: voice.name || voiceName,
-          status: 'cloned',
-          timestamp: new Date().toISOString()
-        };
+      } catch (cleanupError) {
+        console.warn('Warning: Could not clean up temporary files:', cleanupError.message);
       }
+      
+      // Return local voice ID (not stored in ElevenLabs - avoids 30 clone limit)
+      console.log('✅ Voice clone saved locally (not in ElevenLabs)');
+      console.log('💾 Local voice ID:', localVoiceId);
+      console.log('📁 Sample file:', originalFilepath);
+      
+      return {
+        voiceId: localVoiceId, // Local ID, not ElevenLabs ID
+        name: voiceName,
+        status: 'cloned_local',
+        accent: detectedAccent, // Use detected accent
+        sampleFilePath: `/uploads/voice-samples/voice_clone_${localVoiceId}${originalExtension}`,
+        timestamp: new Date().toISOString()
+      };
     } catch (error) {
       console.error('❌ Voice cloning failed:', error.message);
       throw error;
     }
   }
 
-  // Generate speech from text using cloned voice
+  // Generate speech from text using cloned voice (supports local clones and accents)
   async generateSpeech(text, voiceId, options = {}) {
     try {
       if (!this.apiKey) {
@@ -362,71 +240,206 @@ class VoiceCloningService {
       console.log('🔊 Generating speech with voice identifier:', voiceId);
       console.log('📝 Text:', text);
       
-      // Resolve provided identifier (it may be a name from the frontend)
-      const resolvedVoiceId = await this.resolveVoiceId(voiceId);
-      console.log('🔧 Using resolved voice ID:', resolvedVoiceId);
-      
-      // First, verify the voice exists
-      try {
-        console.log('🔍 Verifying voice exists before generating speech...');
-        const voice = await this.client.voices.get(resolvedVoiceId);
-        console.log('✅ Voice found:', voice.name);
-        console.log('📊 Voice has', voice.samples?.length || 0, 'samples');
-        
-        if (!voice.samples || voice.samples.length === 0) {
-          console.warn('⚠️ WARNING: Voice has no samples! This may cause issues.');
-        }
-      } catch (voiceError) {
-        console.error('❌ Voice not found:', resolvedVoiceId);
-        console.error('❌ Error:', voiceError.message);
-        
-        // List available voices to help debug
-        try {
-          const voices = await this.getVoices();
-          console.log('📋 Available cloned voices:');
-          voices.forEach(v => {
-            console.log(`  - ${v.name} (ID: ${v.voiceId})`);
-          });
-        } catch (listError) {
-          console.error('❌ Could not list voices:', listError.message);
-        }
-        
-        throw new Error(`Voice not found: ${resolvedVoiceId}. Please check the voice ID is correct.`);
+      // Auto-detect accent from text if not provided
+      let accentToUse = options.accent;
+      if (!accentToUse) {
+        const languageDetectionService = require('../../../common/services/LanguageDetectionService');
+        const detection = languageDetectionService.detectLanguage(text);
+        accentToUse = detection.language || 'en';
+        console.log('🔍 Auto-detected accent from text:', accentToUse);
+      } else {
+        console.log('🌍 Using provided accent:', accentToUse);
       }
       
-      const audio = await this.client.textToSpeech.convert(
-        resolvedVoiceId, // voice_id
-        {
-          text: text,
-          modelId: options.modelId || 'eleven_multilingual_v2',
-          outputFormat: options.outputFormat || 'mp3_44100_128',
-          voiceSettings: options.voiceSettings || {
-            stability: 0.5,
-            similarityBoost: 0.75
-          }
+      // Check if this is a local voice clone (starts with "local_")
+      const isLocalVoice = voiceId && voiceId.startsWith('local_');
+      
+      if (isLocalVoice) {
+        // Use local voice sample with temporary clone (create, use, delete - avoids 30 limit)
+        console.log('💾 Using LOCAL voice clone (temporary clone method - no 30 limit!)');
+        
+        // Find the local voice sample file
+        const { UserVoice } = require('./models/VoiceCloning');
+        const voiceRecord = await UserVoice.findOne({
+          where: { voice_id: voiceId }
+        });
+        
+        if (!voiceRecord || !voiceRecord.sample_file_path) {
+          throw new Error(`Local voice clone not found: ${voiceId}. Please check the voice ID.`);
         }
-      );
+        
+        const sampleFilePath = path.resolve(process.cwd(), voiceRecord.sample_file_path.replace(/^\//, ''));
+        
+        // Check if file exists
+        try {
+          await fs.access(sampleFilePath);
+        } catch (fileError) {
+          throw new Error(`Voice sample file not found: ${sampleFilePath}`);
+        }
+        
+        console.log('📁 Using local sample file:', sampleFilePath);
+        
+        // Read the sample file
+        const sampleBuffer = await fs.readFile(sampleFilePath);
+        
+        // Create temporary clone, use it, then delete it (avoids 30 limit)
+        let tempVoiceId = null;
+        try {
+          // Create temporary clone
+          console.log('🔄 Creating temporary voice clone...');
+          const tempVoice = await this.client.voices.ivc.create({
+            name: `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            files: [sampleBuffer]
+          });
+          tempVoiceId = tempVoice.voiceId || tempVoice.voice_id || tempVoice.id;
+          console.log('✅ Temporary clone created:', tempVoiceId);
+          
+          // Generate speech using temporary clone
+          const finalAccent = accentToUse || voiceRecord.accent || 'en';
+          const modelId = options.modelId || this.getModelForAccent(finalAccent);
+          console.log('🌍 Using model for accent:', modelId, 'language:', finalAccent);
+          
+          // ElevenLabs API: Use language_code parameter for better pronunciation
+          // Map our accent codes to ElevenLabs language codes
+          const languageCode = this.getLanguageCodeForAccent(finalAccent);
+          
+          const audio = await this.client.textToSpeech.convert(
+            tempVoiceId,
+            {
+              text: text,
+              modelId: modelId,
+              languageCode: languageCode, // NEW: Helps with pronunciation
+              outputFormat: options.outputFormat || 'mp3_44100_128',
+              voiceSettings: {
+                stability: options.voiceSettings?.stability || 0.5,
+                similarityBoost: options.voiceSettings?.similarityBoost || 0.75,
+                style: options.voiceSettings?.style || 0.0,
+                useSpeakerBoost: options.voiceSettings?.useSpeakerBoost !== false
+              }
+            }
+          );
+          
+          // Save generated audio
+          const timestamp = Date.now();
+          const filename = `generated_speech_${timestamp}.mp3`;
+          const filepath = path.join(this.uploadsDir, filename);
+          await fs.writeFile(filepath, audio);
+          
+          const audioUrl = `/uploads/voice-samples/${filename}`;
+          console.log('✅ Speech generated using local clone:', audioUrl);
+          
+          // Delete temporary clone immediately (avoids 30 limit)
+          try {
+            await this.client.voices.delete(tempVoiceId);
+            console.log('🗑️ Temporary clone deleted:', tempVoiceId);
+          } catch (deleteError) {
+            console.warn('⚠️ Failed to delete temporary clone (non-critical):', deleteError.message);
+          }
+          
+          return {
+            audioUrl: audioUrl,
+            audioPath: audioUrl,
+            filename: filename,
+            duration: options.duration || 0,
+            text: text,
+            voiceId: voiceId,
+            accent: finalAccent,
+            isLocalClone: true,
+            timestamp: new Date().toISOString()
+          };
+        } catch (error) {
+          // Clean up temporary clone if it was created
+          if (tempVoiceId) {
+            try {
+              await this.client.voices.delete(tempVoiceId);
+              console.log('🗑️ Cleaned up temporary clone after error');
+            } catch (cleanupError) {
+              console.warn('⚠️ Failed to cleanup temporary clone:', cleanupError.message);
+            }
+          }
+          throw error;
+        }
+      } else {
+        // Traditional ElevenLabs voice (pre-created clone or default voice)
+        console.log('🔧 Using ElevenLabs voice (pre-created clone)');
+        
+        // Resolve provided identifier (it may be a name from the frontend)
+        const resolvedVoiceId = await this.resolveVoiceId(voiceId);
+        console.log('🔧 Using resolved voice ID:', resolvedVoiceId);
+        
+        // First, verify the voice exists
+        try {
+          console.log('🔍 Verifying voice exists before generating speech...');
+          const voice = await this.client.voices.get(resolvedVoiceId);
+          console.log('✅ Voice found:', voice.name);
+          console.log('📊 Voice has', voice.samples?.length || 0, 'samples');
+          
+          if (!voice.samples || voice.samples.length === 0) {
+            console.warn('⚠️ WARNING: Voice has no samples! This may cause issues.');
+          }
+        } catch (voiceError) {
+          console.error('❌ Voice not found:', resolvedVoiceId);
+          console.error('❌ Error:', voiceError.message);
+          
+          // List available voices to help debug
+          try {
+            const voices = await this.getVoices();
+            console.log('📋 Available cloned voices:');
+            voices.forEach(v => {
+              console.log(`  - ${v.name} (ID: ${v.voiceId})`);
+            });
+          } catch (listError) {
+            console.error('❌ Could not list voices:', listError.message);
+          }
+          
+          throw new Error(`Voice not found: ${resolvedVoiceId}. Please check the voice ID is correct.`);
+        }
+        
+        // Get accent-aware model
+        const finalAccent = accentToUse || 'en';
+        const modelId = options.modelId || this.getModelForAccent(finalAccent);
+        console.log('🌍 Using model for accent:', modelId, 'language:', finalAccent);
+        
+        // ElevenLabs API: Use language_code parameter for better pronunciation
+        const languageCode = this.getLanguageCodeForAccent(finalAccent);
+        
+        const audio = await this.client.textToSpeech.convert(
+          resolvedVoiceId, // voice_id
+          {
+            text: text,
+            modelId: modelId,
+            languageCode: languageCode, // NEW: Helps with pronunciation
+            outputFormat: options.outputFormat || 'mp3_44100_128',
+            voiceSettings: {
+              stability: options.voiceSettings?.stability || 0.5,
+              similarityBoost: options.voiceSettings?.similarityBoost || 0.75,
+              style: options.voiceSettings?.style || 0.0,
+              useSpeakerBoost: options.voiceSettings?.useSpeakerBoost !== false
+            }
+          }
+        );
 
-      // Save generated audio
-      const timestamp = Date.now();
-      const filename = `generated_speech_${timestamp}.mp3`;
-      const filepath = path.join(this.uploadsDir, filename);
-      
-      await fs.writeFile(filepath, audio);
-      
-      const audioUrl = `/uploads/voice-samples/${filename}`;
-      
-      console.log('✅ Speech generated successfully:', audioUrl);
-      
-      return {
-        audioUrl: audioUrl,
-        audioPath: audioUrl, // For DB storage
-        filename: filename,
-        duration: options.duration || 0,
-        text: text,
-        voiceId: resolvedVoiceId,
-        timestamp: new Date().toISOString()
-      };
+        // Save generated audio
+        const timestamp = Date.now();
+        const filename = `generated_speech_${timestamp}.mp3`;
+        const filepath = path.join(this.uploadsDir, filename);
+        await fs.writeFile(filepath, audio);
+        
+        const audioUrl = `/uploads/voice-samples/${filename}`;
+        console.log('✅ Speech generated successfully:', audioUrl);
+        
+        return {
+          audioUrl: audioUrl,
+          audioPath: audioUrl, // For DB storage
+          filename: filename,
+          duration: options.duration || 0,
+          text: text,
+          voiceId: resolvedVoiceId,
+          accent: finalAccent,
+          isLocalClone: false,
+          timestamp: new Date().toISOString()
+        };
+      }
     } catch (error) {
       console.error('❌ Speech generation failed:', error.message);
       console.error('❌ Full error:', error);
@@ -609,6 +622,56 @@ class VoiceCloningService {
         apiKey: !!this.apiKey
       };
     }
+  }
+
+  // Get model ID based on accent/locale
+  getModelForAccent(accent) {
+    // eleven_multilingual_v2 supports all languages
+    // This is the recommended model for multilingual support
+    return 'eleven_multilingual_v2';
+  }
+
+  // Get ElevenLabs language_code from accent code
+  // Maps our ISO 639-1 codes to ElevenLabs language codes
+  getLanguageCodeForAccent(accent) {
+    const languageCodeMap = {
+      'en': 'en',      // English
+      'ar': 'ar',      // Arabic
+      'hi': 'hi',      // Hindi
+      'es': 'es',      // Spanish
+      'fr': 'fr',      // French
+      'de': 'de',      // German
+      'pt': 'pt',      // Portuguese
+      'it': 'it',      // Italian
+      'ja': 'ja',      // Japanese
+      'ko': 'ko',      // Korean
+      'zh': 'zh',      // Chinese
+      'th': 'th',      // Thai
+      'pl': 'pl',      // Polish
+      'nl': 'nl',      // Dutch
+      'cs': 'cs',      // Czech
+      'ru': 'ru',      // Russian
+      'tr': 'tr',      // Turkish
+      'sv': 'sv',      // Swedish
+      'da': 'da',      // Danish
+      'fi': 'fi',      // Finnish
+      'no': 'no',      // Norwegian
+      'uk': 'uk',      // Ukrainian
+      'el': 'el',      // Greek
+      'he': 'he',      // Hebrew
+      'id': 'id',      // Indonesian
+      'vi': 'vi',      // Vietnamese
+      'ms': 'ms',      // Malay
+      'ro': 'ro',      // Romanian
+      'hu': 'hu',      // Hungarian
+      'bg': 'bg',      // Bulgarian
+      'hr': 'hr',      // Croatian
+      'sk': 'sk',      // Slovak
+      'sl': 'sl'       // Slovenian
+    };
+    
+    // Return mapped language code or default to English
+    return languageCodeMap[accent] || 'en';
   }
 
   // Test ElevenLabs API connection

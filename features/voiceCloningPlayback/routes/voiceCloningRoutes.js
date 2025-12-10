@@ -16,6 +16,7 @@ router.post('/clone', controller.cloneVoice.bind(controller));
 
 // Generate speech from text using a voice
 router.post('/generate-speech', controller.generateSpeech.bind(controller));
+router.post('/generate', controller.generateSpeech.bind(controller)); // Alias for frontend compatibility
 
 // Get all available voices
 router.get('/voices', controller.getVoices.bind(controller));
@@ -47,7 +48,7 @@ router.get('/user/audio-history', async (req, res) => {
       limit: parseInt(limit),
       offset: parseInt(offset),
       order: [['created_at', 'DESC']],
-      attributes: ['id', 'voice_id', 'voice_name', 'text', 'audio_file_path', 'duration_seconds', 'file_size_bytes', 'created_at']
+      attributes: ['id', 'voice_id', 'voice_name', 'accent', 'text', 'audio_file_path', 'duration_seconds', 'file_size_bytes', 'created_at', 'metadata']
     });
 
     const total = await GeneratedAudio.count({ where: { user_id: userId } });
