@@ -121,6 +121,7 @@ const testConnection = async () => {
 const initializeDatabase = async () => {
   try {
     // Import models to ensure they're registered
+    require('../common/models/User'); // Import User model to sync stripe_customer_id column
     require('../features/aiInterviewEngine/models/Interview');
     require('../features/memoryGraphService/models/MemoryNode');
     require('../features/voiceCloningPlayback/models/VoiceCloning');
@@ -128,7 +129,7 @@ const initializeDatabase = async () => {
     require('../features/multimediaUpload/models/Multimedia');
     require('../features/subscriptionService/models/Subscription');
     
-    await sequelize.sync({ force: false }); // Set to true to recreate tables
+    await sequelize.sync({ force: false, alter: true }); // alter: true adds missing columns
     console.log('✅ AI Prototype database synchronized successfully');
   } catch (error) {
     console.error('❌ AI Prototype database synchronization failed:', error);
