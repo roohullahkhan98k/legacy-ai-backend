@@ -3,9 +3,9 @@ const router = express.Router();
 const subscriptionController = require('../controllers/subscriptionController');
 const { authenticateToken } = require('../../../common/middleware/authMiddleware');
 
-// Webhook endpoint (no auth - Stripe signs it)
-// Note: Raw body middleware is applied in server.js before this route
-router.post('/webhook', subscriptionController.webhook.bind(subscriptionController));
+// Create separate router for webhook (needs raw body, mounted before JSON parser)
+const webhookRouter = express.Router();
+webhookRouter.post('/webhook', express.raw({ type: 'application/json' }), subscriptionController.webhook.bind(subscriptionController));
 
 // Public route
 router.get('/plans', subscriptionController.getPlans.bind(subscriptionController));
