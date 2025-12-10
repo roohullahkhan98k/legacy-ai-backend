@@ -21,7 +21,6 @@ const Subscription = sequelize.define('subscriptions', {
   stripe_subscription_id: {
     type: DataTypes.STRING,
     allowNull: true,
-    unique: true,
     comment: 'Stripe subscription ID'
   },
   plan_type: {
@@ -67,7 +66,7 @@ const Subscription = sequelize.define('subscriptions', {
   indexes: [
     { fields: ['user_id'] },
     { fields: ['stripe_customer_id'] },
-    { fields: ['stripe_subscription_id'] },
+    { unique: true, fields: ['stripe_subscription_id'] },
     { fields: ['plan_type'] },
     { fields: ['status'] }
   ]

@@ -10,14 +10,19 @@ class SubscriptionController {
       const { planType } = req.body;
       const userId = req.user.id; // From auth middleware
 
+      console.log(`💳 [CHECKOUT] User ${userId} requesting checkout for plan: ${planType}`);
+
       if (!planType || !['personal', 'premium', 'ultimate'].includes(planType)) {
+        console.error(`❌ [CHECKOUT] Invalid plan type: ${planType}`);
         return res.status(400).json({
           success: false,
           error: 'Invalid plan type. Must be: personal, premium, or ultimate'
         });
       }
 
+      console.log(`🔄 [CHECKOUT] Creating checkout session for user ${userId}, plan ${planType}`);
       const result = await stripeService.createCheckoutSession(userId, planType);
+      console.log(`✅ [CHECKOUT] Checkout session created: ${result.sessionId} for user ${userId}`);
 
       res.json({
         success: true,
@@ -25,7 +30,8 @@ class SubscriptionController {
         url: result.url
       });
     } catch (error) {
-      console.error('Create checkout error:', error);
+      console.error(`❌ [CHECKOUT] Error for user ${req.user.id}:`, error.message);
+      console.error('Stack:', error.stack);
       res.status(500).json({
         success: false,
         error: error.message
@@ -40,14 +46,17 @@ class SubscriptionController {
   async getStatus(req, res) {
     try {
       const userId = req.user.id;
+      console.log(`📊 [STATUS] Getting subscription status for user ${userId}`);
+      
       const status = await stripeService.getSubscriptionStatus(userId);
+      console.log(`✅ [STATUS] Status retrieved for user ${userId}:`, JSON.stringify(status, null, 2));
 
       res.json({
         success: true,
         subscription: status
       });
     } catch (error) {
-      console.error('Get status error:', error);
+      console.error(`❌ [STATUS] Error for user ${req.user.id}:`, error.message);
       res.status(500).json({
         success: false,
         error: error.message
@@ -62,14 +71,17 @@ class SubscriptionController {
   async cancel(req, res) {
     try {
       const userId = req.user.id;
+      console.log(`🚫 [CANCEL] User ${userId} requesting subscription cancellation`);
+      
       const result = await stripeService.cancelSubscription(userId);
+      console.log(`✅ [CANCEL] Subscription cancelled for user ${userId}: ${result.message}`);
 
       res.json({
         success: true,
         message: result.message
       });
     } catch (error) {
-      console.error('Cancel subscription error:', error);
+      console.error(`❌ [CANCEL] Error for user ${req.user.id}:`, error.message);
       res.status(500).json({
         success: false,
         error: error.message
@@ -83,10 +95,12 @@ class SubscriptionController {
    */
   async webhook(req, res) {
     try {
+      console.log('🔔 Webhook received');
       const sig = req.headers['stripe-signature'];
       const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
       if (!webhookSecret) {
+        console.error('❌ Webhook secret not configured');
         return res.status(500).json({ error: 'Webhook secret not configured' });
       }
 
@@ -95,17 +109,21 @@ class SubscriptionController {
 
       try {
         event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
+        console.log(`✅ Webhook verified: ${event.type} (ID: ${event.id})`);
       } catch (err) {
-        console.error('Webhook signature verification failed:', err.message);
+        console.error('❌ Webhook signature verification failed:', err.message);
         return res.status(400).send(`Webhook Error: ${err.message}`);
       }
 
       // Handle the event
+      console.log(`🔄 Processing webhook event: ${event.type}`);
       await stripeService.handleWebhook(event);
+      console.log(`✅ Webhook processed successfully: ${event.type}`);
 
       res.json({ received: true });
     } catch (error) {
-      console.error('Webhook error:', error);
+      console.error('❌ Webhook error:', error.message);
+      console.error('Stack:', error.stack);
       res.status(500).json({
         success: false,
         error: error.message
