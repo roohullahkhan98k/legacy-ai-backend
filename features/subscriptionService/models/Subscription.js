@@ -31,10 +31,10 @@ const Subscription = sequelize.define('subscriptions', {
     comment: 'Subscription plan type'
   },
   status: {
-    type: DataTypes.ENUM('active', 'canceled', 'past_due', 'unpaid', 'trialing'),
+    type: DataTypes.ENUM('active', 'inactive', 'trialing', 'canceled', 'past_due', 'unpaid', 'incomplete', 'incomplete_expired'),
+    defaultValue: 'inactive',
     allowNull: false,
-    defaultValue: 'active',
-    comment: 'Subscription status'
+    comment: 'Current status of the subscription'
   },
   current_period_start: {
     type: DataTypes.DATE,

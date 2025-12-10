@@ -198,6 +198,21 @@ class StripeService {
    * Create or update subscription in database
    */
   async createOrUpdateSubscription(userId, stripeSubscription, planType) {
+    // Safely convert Unix timestamps to Date objects
+    const periodStart = stripeSubscription.current_period_start 
+      ? new Date(stripeSubscription.current_period_start * 1000)
+      : null;
+    const periodEnd = stripeSubscription.current_period_end 
+      ? new Date(stripeSubscription.current_period_end * 1000)
+      : null;
+    
+    // Map Stripe status to our ENUM values
+    let status = stripeSubscription.status || 'inactive';
+    if (!['active', 'inactive', 'trialing', 'canceled', 'past_due', 'unpaid', 'incomplete', 'incomplete_expired'].includes(status)) {
+      // Default to inactive if status is unknown
+      status = 'inactive';
+    }
+    
     // Update or create subscription
     const [subscription, created] = await Subscription.findOrCreate({
       where: { stripe_subscription_id: stripeSubscription.id },
@@ -206,10 +221,10 @@ class StripeService {
         stripe_customer_id: stripeSubscription.customer,
         stripe_subscription_id: stripeSubscription.id,
         plan_type: planType,
-        status: stripeSubscription.status,
-        current_period_start: new Date(stripeSubscription.current_period_start * 1000),
-        current_period_end: new Date(stripeSubscription.current_period_end * 1000),
-        cancel_at_period_end: stripeSubscription.cancel_at_period_end,
+        status: status,
+        current_period_start: periodStart,
+        current_period_end: periodEnd,
+        cancel_at_period_end: stripeSubscription.cancel_at_period_end || false,
         metadata: stripeSubscription
       }
     });
@@ -217,10 +232,10 @@ class StripeService {
     if (!created) {
       await subscription.update({
         plan_type: planType,
-        status: stripeSubscription.status,
-        current_period_start: new Date(stripeSubscription.current_period_start * 1000),
-        current_period_end: new Date(stripeSubscription.current_period_end * 1000),
-        cancel_at_period_end: stripeSubscription.cancel_at_period_end,
+        status: status,
+        current_period_start: periodStart,
+        current_period_end: periodEnd,
+        cancel_at_period_end: stripeSubscription.cancel_at_period_end || false,
         metadata: stripeSubscription
       });
     }
