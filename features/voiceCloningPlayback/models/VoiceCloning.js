@@ -16,7 +16,6 @@ const UserVoice = sequelize.define('user_voices', {
   voice_id: {
     type: DataTypes.STRING,
     allowNull: false,
-    unique: true,
     comment: 'ElevenLabs voice ID'
   },
   voice_name: {
@@ -49,7 +48,7 @@ const UserVoice = sequelize.define('user_voices', {
   underscored: true,
   indexes: [
     { fields: ['user_id'] },
-    { fields: ['voice_id'] }
+    { unique: true, fields: ['voice_id'] }
   ]
 });
 
