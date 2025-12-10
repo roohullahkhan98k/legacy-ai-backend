@@ -36,6 +36,12 @@ const PORT = process.env.PORT || 3000;
 
 // Middleware
 app.use(cors());
+
+// IMPORTANT: Mount webhook route BEFORE JSON parser (needs raw body)
+const { webhookRouter } = require('./features/subscriptionService/routes/subscriptionRoutes');
+app.use('/api/subscription', webhookRouter);
+
+// Now apply JSON parser for all other routes
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 // Serve uploads statically

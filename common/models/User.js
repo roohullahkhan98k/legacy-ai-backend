@@ -83,12 +83,14 @@ const User = sequelize.define('User', {
   stripe_customer_id: {
     type: DataTypes.STRING,
     allowNull: true,
-    unique: true,
     comment: 'Stripe customer ID'
   }
 }, {
   tableName: 'users',
   timestamps: true,
+  indexes: [
+    { unique: true, fields: ['stripe_customer_id'] }
+  ],
   hooks: {
     beforeCreate: async (user) => {
       if (user.password) {
