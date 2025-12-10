@@ -56,6 +56,14 @@ services:
       - CHROMA_HOST=http://chromadb:8000
       - CHROMA_URL=http://chromadb:8000
       - RHUBARB_CMD=/usr/local/bin/rhubarb
+      # Stripe Configuration
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+      - STRIPE_PUBLISHABLE_KEY=${STRIPE_PUBLISHABLE_KEY}
+      - STRIPE_PRICE_PERSONAL=${STRIPE_PRICE_PERSONAL}
+      - STRIPE_PRICE_PREMIUM=${STRIPE_PRICE_PREMIUM}
+      - STRIPE_PRICE_ULTIMATE=${STRIPE_PRICE_ULTIMATE}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
+      - FRONTEND_URL=${FRONTEND_URL}
     depends_on:
       - postgres
       - chromadb
