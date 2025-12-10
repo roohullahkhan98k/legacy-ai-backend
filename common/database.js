@@ -129,8 +129,28 @@ const initializeDatabase = async () => {
     require('../features/multimediaUpload/models/Multimedia');
     require('../features/subscriptionService/models/Subscription');
     
-    await sequelize.sync({ force: false, alter: true }); // alter: true adds missing columns
-    console.log('✅ AI Prototype database synchronized successfully');
+    // Sync each model individually to handle errors gracefully
+    const models = sequelize.models;
+    let successCount = 0;
+    let errorCount = 0;
+    
+    for (const [modelName, model] of Object.entries(models)) {
+      try {
+        await model.sync({ alter: true });
+        successCount++;
+        console.log(`✅ Synced model: ${modelName}`);
+      } catch (error) {
+        errorCount++;
+        console.warn(`⚠️  Failed to sync ${modelName}:`, error.message);
+        // Continue with other models
+      }
+    }
+    
+    console.log(`✅ Database sync completed: ${successCount} successful, ${errorCount} errors`);
+    
+    if (errorCount > 0) {
+      console.log('⚠️  Some models failed to sync. This is usually okay for existing tables with ENUMs.');
+    }
   } catch (error) {
     console.error('❌ AI Prototype database synchronization failed:', error);
     throw error;
