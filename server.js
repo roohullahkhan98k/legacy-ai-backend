@@ -28,6 +28,7 @@ const voiceCloningRoutes = require('./features/voiceCloningPlayback/routes/voice
 const avatarRoutes = require('./features/avatarService/routes/avatarRoutes');
 const avatarPipelineRoutes = require('./features/avatarService/routes/pipelineRoutes');
 const multimediaRoutes = require('./features/multimediaUpload/routes');
+const subscriptionRoutes = require('./features/subscriptionService/routes/subscriptionRoutes');
 
 
 const app = express();
@@ -83,6 +84,9 @@ app.use('/api/avatar/pipeline', avatarPipelineRoutes);
 
 // Mount Multimedia routes
 app.use('/api/multimedia', multimediaRoutes);
+
+// Mount Subscription routes
+app.use('/api/subscription', subscriptionRoutes);
 
 // Health check endpoint
 app.get('/health', async (req, res) => {

@@ -79,6 +79,12 @@ const User = sequelize.define('User', {
   role: {
     type: DataTypes.ENUM('user', 'admin', 'moderator'),
     defaultValue: 'user'
+  },
+  stripe_customer_id: {
+    type: DataTypes.STRING,
+    allowNull: true,
+    unique: true,
+    comment: 'Stripe customer ID'
   }
 }, {
   tableName: 'users',

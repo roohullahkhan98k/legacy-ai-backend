@@ -126,6 +126,7 @@ const initializeDatabase = async () => {
     require('../features/voiceCloningPlayback/models/VoiceCloning');
     require('../features/avatarService/models/Avatar');
     require('../features/multimediaUpload/models/Multimedia');
+    require('../features/subscriptionService/models/Subscription');
     
     await sequelize.sync({ force: false }); // Set to true to recreate tables
     console.log('✅ AI Prototype database synchronized successfully');
