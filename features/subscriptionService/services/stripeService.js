@@ -55,7 +55,7 @@ class StripeService {
         console.log(`👤 [STRIPE] Using existing Stripe customer: ${customerId}`);
       }
 
-      // Create checkout session
+      // Create checkout session with billing cycle anchor and proration
       console.log(`🔄 [STRIPE] Creating Stripe checkout session...`);
       const session = await stripe.checkout.sessions.create({
         customer: customerId,
@@ -67,6 +67,13 @@ class StripeService {
           }
         ],
         mode: 'subscription',
+        subscription_data: {
+          billing_cycle_anchor: 'now',
+          metadata: {
+            userId: userId.toString(),
+            planType: planType
+          }
+        },
         success_url: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/subscription/success?session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/subscription/cancel`,
         metadata: {
@@ -359,6 +366,231 @@ class StripeService {
     } catch (error) {
       console.error(`❌ [CANCEL] Error for user ${userId}:`, error.message);
       throw new Error(`Failed to cancel subscription: ${error.message}`);
+    }
+  }
+
+  /**
+   * Upgrade or downgrade subscription with proration
+   */
+  async changePlan(userId, newPlanType) {
+    try {
+      console.log(`🔄 [CHANGE_PLAN] User ${userId} requesting plan change to: ${newPlanType}`);
+      
+      if (!this.priceIds[newPlanType]) {
+        console.error(`❌ [CHANGE_PLAN] Invalid plan type: ${newPlanType}`);
+        throw new Error(`Invalid plan type: ${newPlanType}`);
+      }
+
+      const subscription = await Subscription.findOne({
+        where: { user_id: userId, status: 'active' }
+      });
+
+      if (!subscription) {
+        console.error(`❌ [CHANGE_PLAN] No active subscription found for user ${userId}`);
+        throw new Error('No active subscription found');
+      }
+
+      console.log(`✅ [CHANGE_PLAN] Found subscription ${subscription.id}, current plan: ${subscription.plan_type}`);
+      console.log(`💰 [CHANGE_PLAN] New price ID: ${this.priceIds[newPlanType]}`);
+
+      // Get current subscription from Stripe
+      const stripeSubscription = await stripe.subscriptions.retrieve(subscription.stripe_subscription_id);
+      const currentItemId = stripeSubscription.items.data[0].id;
+
+      console.log(`🔄 [CHANGE_PLAN] Updating subscription with proration...`);
+
+      // Update subscription with proration
+      const updatedSubscription = await stripe.subscriptions.update(
+        subscription.stripe_subscription_id,
+        {
+          items: [{
+            id: currentItemId,
+            price: this.priceIds[newPlanType],
+          }],
+          proration_behavior: 'create_prorations',
+          billing_cycle_anchor: 'now',
+          metadata: {
+            userId: userId.toString(),
+            planType: newPlanType
+          }
+        }
+      );
+
+      console.log(`✅ [CHANGE_PLAN] Stripe subscription updated - New plan: ${newPlanType}`);
+
+      // Update database
+      await this.createOrUpdateSubscription(userId, updatedSubscription, newPlanType);
+
+      console.log(`✅ [CHANGE_PLAN] Plan changed successfully to ${newPlanType}`);
+      return {
+        success: true,
+        message: `Subscription changed to ${newPlanType} plan`,
+        subscription: {
+          plan: newPlanType,
+          status: updatedSubscription.status,
+          currentPeriodEnd: new Date(updatedSubscription.current_period_end * 1000)
+        }
+      };
+    } catch (error) {
+      console.error(`❌ [CHANGE_PLAN] Error for user ${userId}:`, error.message);
+      throw new Error(`Failed to change plan: ${error.message}`);
+    }
+  }
+
+  /**
+   * Resume canceled subscription
+   */
+  async resumeSubscription(userId) {
+    try {
+      console.log(`▶️  [RESUME] User ${userId} requesting to resume subscription`);
+      
+      const subscription = await Subscription.findOne({
+        where: { user_id: userId }
+      });
+
+      if (!subscription) {
+        console.error(`❌ [RESUME] No subscription found for user ${userId}`);
+        throw new Error('No subscription found');
+      }
+
+      if (subscription.status === 'active' && !subscription.cancel_at_period_end) {
+        console.log(`ℹ️  [RESUME] Subscription is already active`);
+        return {
+          success: true,
+          message: 'Subscription is already active'
+        };
+      }
+
+      console.log(`🔄 [RESUME] Resuming Stripe subscription...`);
+
+      // Resume subscription in Stripe
+      const resumedSubscription = await stripe.subscriptions.update(
+        subscription.stripe_subscription_id,
+        {
+          cancel_at_period_end: false
+        }
+      );
+
+      console.log(`✅ [RESUME] Stripe subscription resumed`);
+
+      // Update database
+      await subscription.update({
+        cancel_at_period_end: false,
+        status: resumedSubscription.status
+      });
+
+      console.log(`✅ [RESUME] Subscription resumed successfully`);
+      return {
+        success: true,
+        message: 'Subscription resumed successfully',
+        subscription: {
+          plan: subscription.plan_type,
+          status: resumedSubscription.status,
+          cancelAtPeriodEnd: false
+        }
+      };
+    } catch (error) {
+      console.error(`❌ [RESUME] Error for user ${userId}:`, error.message);
+      throw new Error(`Failed to resume subscription: ${error.message}`);
+    }
+  }
+
+  /**
+   * Get billing dashboard data
+   */
+  async getBillingDashboard(userId) {
+    try {
+      console.log(`📊 [BILLING] Getting billing dashboard for user ${userId}`);
+      
+      const subscription = await Subscription.findOne({
+        where: { user_id: userId },
+        order: [['created_at', 'DESC']]
+      });
+
+      if (!subscription) {
+        return {
+          hasSubscription: false,
+          subscription: null,
+          paymentMethod: null,
+          invoices: [],
+          upcomingInvoice: null
+        };
+      }
+
+      const user = await User.findByPk(userId);
+      if (!user || !user.stripe_customer_id) {
+        throw new Error('Stripe customer not found');
+      }
+
+      // Get payment methods
+      const paymentMethods = await stripe.paymentMethods.list({
+        customer: user.stripe_customer_id,
+        type: 'card'
+      });
+
+      // Get invoices
+      const invoices = await stripe.invoices.list({
+        customer: user.stripe_customer_id,
+        limit: 12
+      });
+
+      // Get upcoming invoice
+      let upcomingInvoice = null;
+      try {
+        upcomingInvoice = await stripe.invoices.retrieveUpcoming({
+          customer: user.stripe_customer_id,
+          subscription: subscription.stripe_subscription_id
+        });
+      } catch (error) {
+        console.log(`ℹ️  [BILLING] No upcoming invoice: ${error.message}`);
+      }
+
+      console.log(`✅ [BILLING] Dashboard data retrieved`);
+
+      return {
+        hasSubscription: true,
+        subscription: {
+          id: subscription.id,
+          plan: subscription.plan_type,
+          status: subscription.status,
+          currentPeriodStart: subscription.current_period_start,
+          currentPeriodEnd: subscription.current_period_end,
+          cancelAtPeriodEnd: subscription.cancel_at_period_end,
+          canceledAt: subscription.canceled_at
+        },
+        paymentMethod: paymentMethods.data[0] ? {
+          id: paymentMethods.data[0].id,
+          type: paymentMethods.data[0].type,
+          card: {
+            brand: paymentMethods.data[0].card.brand,
+            last4: paymentMethods.data[0].card.last4,
+            expMonth: paymentMethods.data[0].card.exp_month,
+            expYear: paymentMethods.data[0].card.exp_year
+          }
+        } : null,
+        invoices: invoices.data.map(inv => ({
+          id: inv.id,
+          number: inv.number,
+          amount: inv.amount_paid / 100,
+          currency: inv.currency.toUpperCase(),
+          status: inv.status,
+          created: new Date(inv.created * 1000),
+          periodStart: inv.period_start ? new Date(inv.period_start * 1000) : null,
+          periodEnd: inv.period_end ? new Date(inv.period_end * 1000) : null,
+          hostedInvoiceUrl: inv.hosted_invoice_url,
+          invoicePdf: inv.invoice_pdf
+        })),
+        upcomingInvoice: upcomingInvoice ? {
+          amount: upcomingInvoice.amount_due / 100,
+          currency: upcomingInvoice.currency.toUpperCase(),
+          periodStart: new Date(upcomingInvoice.period_start * 1000),
+          periodEnd: new Date(upcomingInvoice.period_end * 1000),
+          nextPaymentAttempt: upcomingInvoice.next_payment_attempt ? new Date(upcomingInvoice.next_payment_attempt * 1000) : null
+        } : null
+      };
+    } catch (error) {
+      console.error(`❌ [BILLING] Error for user ${userId}:`, error.message);
+      throw new Error(`Failed to get billing dashboard: ${error.message}`);
     }
   }
 

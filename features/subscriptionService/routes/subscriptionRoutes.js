@@ -12,8 +12,11 @@ router.get('/plans', subscriptionController.getPlans.bind(subscriptionController
 
 // Protected routes (require authentication)
 router.get('/status', authenticateToken, subscriptionController.getStatus.bind(subscriptionController));
+router.get('/billing', authenticateToken, subscriptionController.getBilling.bind(subscriptionController));
 router.post('/checkout', authenticateToken, subscriptionController.createCheckout.bind(subscriptionController));
+router.post('/change-plan', authenticateToken, subscriptionController.changePlan.bind(subscriptionController));
 router.post('/cancel', authenticateToken, subscriptionController.cancel.bind(subscriptionController));
+router.post('/resume', authenticateToken, subscriptionController.resume.bind(subscriptionController));
 
 module.exports = router;
 module.exports.webhookRouter = webhookRouter;

@@ -90,6 +90,84 @@ class SubscriptionController {
   }
 
   /**
+   * Change subscription plan (upgrade/downgrade)
+   * POST /api/subscription/change-plan
+   */
+  async changePlan(req, res) {
+    try {
+      const { planType } = req.body;
+      const userId = req.user.id;
+
+      console.log(`🔄 [CHANGE_PLAN] User ${userId} requesting plan change to: ${planType}`);
+
+      if (!planType || !['personal', 'premium', 'ultimate'].includes(planType)) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid plan type. Must be: personal, premium, or ultimate'
+        });
+      }
+
+      const result = await stripeService.changePlan(userId, planType);
+      console.log(`✅ [CHANGE_PLAN] Plan changed for user ${userId}`);
+
+      res.json(result);
+    } catch (error) {
+      console.error(`❌ [CHANGE_PLAN] Error for user ${req.user.id}:`, error.message);
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+  }
+
+  /**
+   * Resume canceled subscription
+   * POST /api/subscription/resume
+   */
+  async resume(req, res) {
+    try {
+      const userId = req.user.id;
+      console.log(`▶️  [RESUME] User ${userId} requesting to resume subscription`);
+      
+      const result = await stripeService.resumeSubscription(userId);
+      console.log(`✅ [RESUME] Subscription resumed for user ${userId}`);
+
+      res.json(result);
+    } catch (error) {
+      console.error(`❌ [RESUME] Error for user ${req.user.id}:`, error.message);
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+  }
+
+  /**
+   * Get billing dashboard
+   * GET /api/subscription/billing
+   */
+  async getBilling(req, res) {
+    try {
+      const userId = req.user.id;
+      console.log(`📊 [BILLING] Getting billing dashboard for user ${userId}`);
+      
+      const dashboard = await stripeService.getBillingDashboard(userId);
+      console.log(`✅ [BILLING] Dashboard retrieved for user ${userId}`);
+
+      res.json({
+        success: true,
+        ...dashboard
+      });
+    } catch (error) {
+      console.error(`❌ [BILLING] Error for user ${req.user.id}:`, error.message);
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+  }
+
+  /**
    * Handle Stripe webhook
    * POST /api/subscription/webhook
    */
