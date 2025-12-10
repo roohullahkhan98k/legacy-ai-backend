@@ -11,6 +11,10 @@ const {
 	deleteByIds,
 	updateMetadatasByIds
 } = require('../../../chromaDB/chromadb');
+// Milestone 6: Language detection service
+const languageDetectionService = require('../../../common/services/LanguageDetectionService');
+// Milestone 6: Translation service (Next 35%)
+const translationService = require('../../../common/services/TranslationService');
 
 const MEMORY_COLLECTION = process.env.MEMORY_COLLECTION || 'memory-graph';
 
@@ -71,7 +75,39 @@ exports.createMemory = async (req, res) => {
 		for (const p of uploaded) mediaCombined.push(p);
 		const tagsCombined = Array.isArray(tags) ? tags : [];
 
-		console.log('[MemoryGraph] createMemory - Saving with userId:', userId, 'person:', person, 'memoryId:', memoryId);
+		// Milestone 6: Auto-detect language from document text
+		const languageDetection = languageDetectionService.detectLanguage(document);
+		const detectedLanguage = languageDetection.language || 'en';
+		const languageConfidence = languageDetection.confidence || 0;
+
+		console.log('[MemoryGraph] createMemory - Saving with userId:', userId, 'person:', person, 'memoryId:', memoryId, 'language:', detectedLanguage);
+
+		// Milestone 6: Next 35% - Generate translations (async, don't block)
+		let translatedTexts = {};
+		const targetLanguages = ['en', 'ar', 'hi']; // Common languages to translate to
+		
+		// Generate translations in background (non-blocking)
+		if (translationService.isAvailable() && detectedLanguage) {
+          translationService.translateToMultiple(document, detectedLanguage, targetLanguages)
+            .then(translations => {
+              // Only update if we got actual translations (not empty object)
+              if (translations && Object.keys(translations).length > 0) {
+                MemoryNode.update(
+                  { translated_texts: translations },
+                  { where: { id: memoryId } }
+                ).then(() => {
+                  console.log(`✅ Translations saved for memory ${memoryId}:`, Object.keys(translations).join(', '));
+                }).catch(err => console.warn('Failed to save translations:', err.message));
+              } else {
+                console.log(`⚠️ No translations generated for memory ${memoryId} (quota/error)`);
+              }
+            })
+            .catch(err => {
+              // Silently handle - translation is optional, memory creation still succeeds
+              // Error already logged in TranslationService
+              console.log(`⚠️ Translation generation failed for memory ${memoryId}:`, err.message);
+            });
+        }
 
 		// Save to PostgreSQL
 		await MemoryNode.create({
@@ -83,7 +119,9 @@ exports.createMemory = async (req, res) => {
 			tags: tagsCombined,
 			media: mediaCombined,
 			metadata: extra || {},
-			chroma_id: memoryId
+			chroma_id: memoryId,
+			original_language: detectedLanguage, // Milestone 6: Store detected language
+			translated_texts: translatedTexts // Milestone 6: Next 35% - Will be updated async
 		});
 
 		// Save to ChromaDB
@@ -100,7 +138,17 @@ exports.createMemory = async (req, res) => {
 		
 		await upsertDocuments(MEMORY_COLLECTION, [ { id: memoryId, document, metadata } ]);
 		
-		return res.json({ ok: true, id: memoryId });
+		// Milestone 6: Return language information in response
+		return res.json({ 
+			ok: true, 
+			id: memoryId,
+			language: {
+				code: detectedLanguage,
+				name: languageDetectionService.getLanguageName(detectedLanguage),
+				confidence: languageConfidence,
+				isRTL: languageDetectionService.isRTL(detectedLanguage)
+			}
+		});
 	} catch (err) {
 		const status = err.status || err?.response?.status || 500;
 		return res.status(status).json({ error: 'createMemory failed', message: err.message });
@@ -121,10 +169,53 @@ exports.searchMemories = async (req, res) => {
 			where.user_id = userId;
 		}
 		
-		console.log('[MemoryGraph] searchMemories - userId:', userId, 'query:', q);
+		// Milestone 6: Next 35% - Detect query language for cross-lingual search
+		const queryLanguage = languageDetectionService.detectLanguage(q);
+		console.log('[MemoryGraph] searchMemories - userId:', userId, 'query:', q, 'queryLanguage:', queryLanguage.language);
 		
 		if (!q) return res.status(400).json({ error: 'q is required' });
+		
+		// Cross-lingual search: text-embedding-3-large supports multilingual embeddings
+		// So searching in English will find Arabic/Hindi memories automatically
 		const result = await queryCollection(MEMORY_COLLECTION, [ q ], { n_results: n, where });
+		
+		// Milestone 6: Add language info to search results
+		if (result.ids && result.ids[0]) {
+			// Get memory nodes from PostgreSQL to include language info
+			const memoryIds = result.ids[0];
+			const memories = await MemoryNode.findAll({
+				where: { id: { [Op.in]: memoryIds } },
+				attributes: ['id', 'original_language', 'translated_texts']
+			});
+			
+			// Create map for quick lookup
+			const memoryMap = new Map();
+			memories.forEach(m => memoryMap.set(m.id, m));
+			
+			// Add language info to metadata
+			if (result.metadatas && result.metadatas[0]) {
+				result.metadatas[0] = result.metadatas[0].map((meta, idx) => {
+					const memoryId = result.ids[0][idx];
+					const memory = memoryMap.get(memoryId);
+					const translatedTexts = memory?.translated_texts || {};
+					const hasActualTranslations = Object.keys(translatedTexts).length > 0;
+					return {
+						...meta,
+						language: memory?.original_language || 'en',
+						hasTranslations: hasActualTranslations,
+						availableLanguages: hasActualTranslations ? Object.keys(translatedTexts).concat(memory?.original_language || 'en') : [memory?.original_language || 'en']
+					};
+				});
+			}
+		}
+		
+		// Add query language info to response
+		result.queryLanguage = {
+			code: queryLanguage.language,
+			name: languageDetectionService.getLanguageName(queryLanguage.language),
+			confidence: queryLanguage.confidence
+		};
+		
 		return res.json(result);
 	} catch (err) {
 		const status = err.status || err?.response?.status || 500;
@@ -175,7 +266,15 @@ exports.getGraph = async (req, res) => {
 				event: memory.event,
 				media: memory.media,
 				tags: memory.tags,
-				...memory.metadata
+				...memory.metadata,
+				// Milestone 6: Include language information
+				language: memory.original_language || 'en',
+				// Milestone 6: Next 35% - Include translations
+				translated_texts: memory.translated_texts || {},
+				hasTranslations: memory.translated_texts && Object.keys(memory.translated_texts).length > 0,
+				availableLanguages: memory.translated_texts && Object.keys(memory.translated_texts).length > 0 
+					? Object.keys(memory.translated_texts).concat(memory.original_language || 'en')
+					: [memory.original_language || 'en']
 			};
 
 			addNode(memId, memory.document, 'memory', meta);
@@ -241,6 +340,36 @@ exports.addTags = async (req, res) => {
 		const person = metadataUpdate.person || memory.person;
 		const event = metadataUpdate.event || memory.event;
 
+		// Milestone 6: Re-detect language if document was updated
+		let detectedLanguage = memory.original_language;
+		let translatedTexts = memory.translated_texts || {};
+		
+		if (req.body.document && req.body.document !== memory.document) {
+			const languageDetection = languageDetectionService.detectLanguage(doc);
+			detectedLanguage = languageDetection.language || memory.original_language || 'en';
+			console.log('[MemoryGraph] addTags - Re-detected language:', detectedLanguage);
+			
+			// Milestone 6: Next 35% - Regenerate translations if document changed
+			if (translationService.isAvailable() && detectedLanguage) {
+				const targetLanguages = ['en', 'ar', 'hi'];
+				translationService.translateToMultiple(doc, detectedLanguage, targetLanguages)
+					.then(translations => {
+						// Only update if we got actual translations (not empty object)
+						if (translations && Object.keys(translations).length > 0) {
+							MemoryNode.update(
+								{ translated_texts: translations },
+								{ where: { id } }
+							).then(() => {
+								console.log(`✅ Translations regenerated for memory ${id}:`, Object.keys(translations).join(', '));
+							}).catch(err => console.warn('Failed to update translations:', err.message));
+						} else {
+							console.log(`⚠️ No translations regenerated for memory ${id} (quota/error)`);
+						}
+					})
+					.catch(err => console.warn('Translation regeneration failed:', err.message));
+			}
+		}
+
 		// Update PostgreSQL
 		await memory.update({
 			document: doc,
@@ -248,7 +377,9 @@ exports.addTags = async (req, res) => {
 			event,
 			tags: tagsCombined,
 			media: mediaCombined,
-			metadata: { ...memory.metadata, ...metadataUpdate }
+			metadata: { ...memory.metadata, ...metadataUpdate },
+			original_language: detectedLanguage, // Milestone 6: Update language if document changed
+			translated_texts: translatedTexts // Milestone 6: Next 35% - Will be updated async if document changed
 		});
 
 		// Update ChromaDB
@@ -264,7 +395,17 @@ exports.addTags = async (req, res) => {
 		await updateMetadatasByIds(MEMORY_COLLECTION, [ id ], [ chromaMeta ], [ doc ]);
 		console.log('[MemoryGraph] update success', { id, updated: true });
 		
-		return res.json({ ok: true, id, tags: tagsCombined });
+		// Milestone 6: Return language information in response
+		return res.json({ 
+			ok: true, 
+			id, 
+			tags: tagsCombined,
+			language: {
+				code: detectedLanguage,
+				name: languageDetectionService.getLanguageName(detectedLanguage),
+				isRTL: languageDetectionService.isRTL(detectedLanguage)
+			}
+		});
 	} catch (err) {
 		console.error('[MemoryGraph] update error', { message: err?.message, status: err?.status });
 		const status = err.status || err?.response?.status || 500;
@@ -287,6 +428,55 @@ exports.deleteMemory = async (req, res) => {
 	} catch (err) {
 		const status = err.status || err?.response?.status || 500;
 		return res.status(status).json({ error: 'deleteMemory failed', message: err.message });
+	}
+};
+
+// Milestone 6: Next 35% - Get memory in user's preferred language
+exports.getMemoryInLanguage = async (req, res) => {
+	try {
+		const { id } = req.params;
+		const preferredLang = req.query.lang || req.headers['accept-language']?.split(',')[0]?.split('-')[0] || 'en';
+		
+		if (!id) return res.status(400).json({ error: 'id is required' });
+		
+		const memory = await MemoryNode.findByPk(id);
+		if (!memory) {
+			return res.status(404).json({ error: 'Memory not found' });
+		}
+		
+		// Get document in preferred language
+		let displayText = memory.document; // Default to original
+		const originalLang = memory.original_language || 'en';
+		const translatedTexts = memory.translated_texts || {};
+		const hasActualTranslations = Object.keys(translatedTexts).length > 0;
+		
+		// If user wants different language and translation exists
+		if (preferredLang !== originalLang && hasActualTranslations && translatedTexts[preferredLang]) {
+			displayText = translatedTexts[preferredLang];
+		} else if (preferredLang === originalLang) {
+			// User wants original language
+			displayText = memory.document;
+		}
+		
+		return res.json({
+			ok: true,
+			id: memory.id,
+			document: displayText,
+			original_document: memory.document,
+			original_language: originalLang,
+			display_language: preferredLang,
+			translated_texts: translatedTexts,
+			available_languages: hasActualTranslations ? Object.keys(translatedTexts).concat(originalLang) : [originalLang],
+			has_translations: hasActualTranslations,
+			person: memory.person,
+			event: memory.event,
+			tags: memory.tags,
+			media: memory.media,
+			metadata: memory.metadata
+		});
+	} catch (err) {
+		const status = err.status || err?.response?.status || 500;
+		return res.status(status).json({ error: 'getMemoryInLanguage failed', message: err.message });
 	}
 };
 

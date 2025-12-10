@@ -46,6 +46,18 @@ const MemoryNode = sequelize.define('memory_nodes', {
     type: DataTypes.JSONB,
     defaultValue: {},
     comment: 'Additional metadata'
+  },
+  // Milestone 6: Multilingual support (35% implementation)
+  original_language: {
+    type: DataTypes.STRING(10),
+    allowNull: true,
+    comment: 'Detected language code (e.g., en, ar, hi) - auto-detected on creation'
+  },
+  // Milestone 6: Next 35% - Translation storage
+  translated_texts: {
+    type: DataTypes.JSONB,
+    defaultValue: {},
+    comment: 'Translations of memory text: { "en": "English text", "ar": "Arabic text" }'
   }
 }, {
   timestamps: true,
@@ -56,7 +68,11 @@ const MemoryNode = sequelize.define('memory_nodes', {
     { fields: ['event'] },
     { fields: ['chroma_id'] },
     { fields: ['created_at'] },
-    { fields: ['tags'], using: 'gin' }
+    { fields: ['tags'], using: 'gin' },
+    // Milestone 6: Index for language filtering
+    { fields: ['original_language'] },
+    // Milestone 6: GIN index on translated_texts for fast translation lookups
+    { fields: ['translated_texts'], using: 'gin' }
   ]
 });
 

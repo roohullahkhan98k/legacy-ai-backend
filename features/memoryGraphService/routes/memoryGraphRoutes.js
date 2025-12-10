@@ -47,6 +47,8 @@ router.post('/media/upload', upload.array('files', 10), (req, res) => {
 router.post('/memories', upload.fields([{ name: 'media', maxCount: 10 }, { name: 'files', maxCount: 10 }]), ctrl.createMemory);
 router.get('/memories/search', ctrl.searchMemories);
 router.get('/graph', ctrl.getGraph);
+// Milestone 6: Next 35% - Get memory in preferred language
+router.get('/memories/:id/translated', ctrl.getMemoryInLanguage);
 // Update memory with optional media files
 router.post('/memories/:id/tags', upload.fields([{ name: 'media', maxCount: 10 }, { name: 'files', maxCount: 10 }]), ctrl.addTags);
 router.delete('/memories/:id', ctrl.deleteMemory);

@@ -31,7 +31,8 @@ function getEmbedder() {
 		if (!sharedEmbedder) {
 			sharedEmbedder = {
 				generate: async (texts) => {
-					const model = process.env.OPENAI_EMBED_MODEL || 'text-embedding-3-small';
+					// Milestone 6: Upgraded to text-embedding-3-large for multilingual support
+					const model = process.env.OPENAI_EMBED_MODEL || 'text-embedding-3-large';
 					const res = await sharedOpenAI.embeddings.create({ model, input: texts });
 					return res.data.map(d => d.embedding);
 				}
