@@ -1,5 +1,5 @@
 const FeatureLimit = require('../models/FeatureLimit');
-const FeatureLimitService = require('../services/FeatureLimitService');
+const featureLimitService = require('../services/FeatureLimitService');
 
 class AdminController {
   /**
@@ -209,7 +209,6 @@ class AdminController {
    */
   async resetLimits(req, res) {
     try {
-      const featureLimitService = new FeatureLimitService();
       await featureLimitService.initializeDefaultLimits();
 
       const limits = await FeatureLimit.findAll({
