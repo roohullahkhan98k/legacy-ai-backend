@@ -46,22 +46,36 @@ exports.createMemory = async (req, res) => {
 	try {
 		const userId = req.user?.id;
 		
-		// Check feature limit before creating memory
+		// Check subscription and feature limit before creating memory
 		if (userId) {
 			const featureLimitService = require('../../subscriptionService/services/FeatureLimitService');
 			const limitCheck = await featureLimitService.checkLimit(userId, 'memory_graph_operations');
 			
 			if (!limitCheck.allowed) {
-				return res.status(403).json({
-					success: false,
-					error: 'Limit reached',
-					message: `You have reached your memory graph operations limit (${limitCheck.limit}). Upgrade your plan to create more memories.`,
-					limit: limitCheck.limit,
-					currentUsage: limitCheck.currentUsage,
-					remaining: limitCheck.remaining,
-					plan: limitCheck.plan,
-					upgradeRequired: true
-				});
+				// Different response based on whether they need subscription or hit limit
+				if (limitCheck.needsSubscription) {
+					return res.status(403).json({
+						success: false,
+						error: 'Subscription required',
+						message: 'You need an active subscription to create memory nodes. Please subscribe to continue.',
+						hasSubscription: false,
+						needsSubscription: true,
+						redirectToPricing: true
+					});
+				} else if (limitCheck.limitReached) {
+					return res.status(403).json({
+						success: false,
+						error: 'Limit reached',
+						message: limitCheck.message || `You have reached your memory graph operations limit (${limitCheck.limit}). Upgrade your plan to create more memories.`,
+						limit: limitCheck.limit,
+						currentUsage: limitCheck.currentUsage,
+						remaining: limitCheck.remaining,
+						plan: limitCheck.plan,
+						hasSubscription: true,
+						limitReached: true,
+						redirectToPricing: true
+					});
+				}
 			}
 		}
 		console.log('[MemoryGraph] createMemory START - req.user:', req.user ? 'EXISTS' : 'NULL', 'id:', req.user?.id);

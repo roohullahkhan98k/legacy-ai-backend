@@ -13,22 +13,36 @@ class InterviewController {
         return res.status(400).json({ success: false, error: 'session_id required' });
       }
 
-      // Check feature limit before starting interview
+      // Check subscription and feature limit before starting interview
       if (userId) {
         const featureLimitService = require('../../subscriptionService/services/FeatureLimitService');
         const limitCheck = await featureLimitService.checkLimit(userId, 'interview_sessions');
         
         if (!limitCheck.allowed) {
-          return res.status(403).json({
-            success: false,
-            error: 'Limit reached',
-            message: `You have reached your interview sessions limit (${limitCheck.limit}). Upgrade your plan to start more interviews.`,
-            limit: limitCheck.limit,
-            currentUsage: limitCheck.currentUsage,
-            remaining: limitCheck.remaining,
-            plan: limitCheck.plan,
-            upgradeRequired: true
-          });
+          // Different response based on whether they need subscription or hit limit
+          if (limitCheck.needsSubscription) {
+            return res.status(403).json({
+              success: false,
+              error: 'Subscription required',
+              message: 'You need an active subscription to start interviews. Please subscribe to continue.',
+              hasSubscription: false,
+              needsSubscription: true,
+              redirectToPricing: true
+            });
+          } else if (limitCheck.limitReached) {
+            return res.status(403).json({
+              success: false,
+              error: 'Limit reached',
+              message: limitCheck.message || `You have reached your interview sessions limit (${limitCheck.limit}). Upgrade your plan to start more interviews.`,
+              limit: limitCheck.limit,
+              currentUsage: limitCheck.currentUsage,
+              remaining: limitCheck.remaining,
+              plan: limitCheck.plan,
+              hasSubscription: true,
+              limitReached: true,
+              redirectToPricing: true
+            });
+          }
         }
       }
 

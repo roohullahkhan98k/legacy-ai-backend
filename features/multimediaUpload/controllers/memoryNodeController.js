@@ -19,21 +19,35 @@ class MemoryNodeController {
         });
       }
 
-      // Check feature limit before creating memory node (multimedia uploads are counted per node, not per photo)
+      // Check subscription and feature limit before creating memory node (multimedia uploads are counted per node, not per photo)
       const featureLimitService = require('../../subscriptionService/services/FeatureLimitService');
       const limitCheck = await featureLimitService.checkLimit(userId, 'multimedia_uploads');
       
       if (!limitCheck.allowed) {
-        return res.status(403).json({
-          success: false,
-          error: 'Limit reached',
-          message: `You have reached your multimedia upload limit (${limitCheck.limit} nodes per month). Upgrade your plan to create more memory nodes.`,
-          limit: limitCheck.limit,
-          currentUsage: limitCheck.currentUsage,
-          remaining: limitCheck.remaining,
-          plan: limitCheck.plan,
-          upgradeRequired: true
-        });
+        // Different response based on whether they need subscription or hit limit
+        if (limitCheck.needsSubscription) {
+          return res.status(403).json({
+            success: false,
+            error: 'Subscription required',
+            message: 'You need an active subscription to create memory nodes. Please subscribe to continue.',
+            hasSubscription: false,
+            needsSubscription: true,
+            redirectToPricing: true
+          });
+        } else if (limitCheck.limitReached) {
+          return res.status(403).json({
+            success: false,
+            error: 'Limit reached',
+            message: limitCheck.message || `You have reached your multimedia upload limit (${limitCheck.limit} nodes per month). Upgrade your plan to create more memory nodes.`,
+            limit: limitCheck.limit,
+            currentUsage: limitCheck.currentUsage,
+            remaining: limitCheck.remaining,
+            plan: limitCheck.plan,
+            hasSubscription: true,
+            limitReached: true,
+            redirectToPricing: true
+          });
+        }
       }
 
       const nodeId = `node_${Date.now()}_${randomUUID()}`;

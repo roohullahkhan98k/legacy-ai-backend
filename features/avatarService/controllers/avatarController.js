@@ -29,21 +29,35 @@ const createAvatar = handleAsync(async (req, res) => {
     return res.status(401).json({ error: 'Authentication required' });
   }
 
-  // Check feature limit before processing
+  // Check subscription and feature limit before processing
   const featureLimitService = require('../../subscriptionService/services/FeatureLimitService');
   const limitCheck = await featureLimitService.checkLimit(userId, 'avatar_generations');
   
   if (!limitCheck.allowed) {
-    return res.status(403).json({
-      ok: false,
-      error: 'Limit reached',
-      message: `You have reached your avatar generation limit (${limitCheck.limit}). Upgrade your plan to generate more avatars.`,
-      limit: limitCheck.limit,
-      currentUsage: limitCheck.currentUsage,
-      remaining: limitCheck.remaining,
-      plan: limitCheck.plan,
-      upgradeRequired: true
-    });
+    // Different response based on whether they need subscription or hit limit
+    if (limitCheck.needsSubscription) {
+      return res.status(403).json({
+        ok: false,
+        error: 'Subscription required',
+        message: 'You need an active subscription to generate avatars. Please subscribe to continue.',
+        hasSubscription: false,
+        needsSubscription: true,
+        redirectToPricing: true
+      });
+    } else if (limitCheck.limitReached) {
+      return res.status(403).json({
+        ok: false,
+        error: 'Limit reached',
+        message: limitCheck.message || `You have reached your avatar generation limit (${limitCheck.limit}). Upgrade your plan to generate more avatars.`,
+        limit: limitCheck.limit,
+        currentUsage: limitCheck.currentUsage,
+        remaining: limitCheck.remaining,
+        plan: limitCheck.plan,
+        hasSubscription: true,
+        limitReached: true,
+        redirectToPricing: true
+      });
+    }
   }
 
   const name = req.body?.name || path.parse(req.file.originalname).name;

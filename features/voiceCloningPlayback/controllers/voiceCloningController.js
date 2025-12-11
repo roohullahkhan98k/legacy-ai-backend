@@ -80,7 +80,7 @@ class VoiceCloningController {
           });
         }
 
-        // Check feature limit
+        // Check subscription and feature limit
         const userId = req.user?.id;
         if (userId) {
           const featureLimitService = require('../../subscriptionService/services/FeatureLimitService');
@@ -94,15 +94,28 @@ class VoiceCloningController {
               console.warn('Warning: Could not clean up uploaded file:', cleanupError.message);
             }
             
-            return res.status(403).json({
-              error: 'Limit reached',
-              message: `You have reached your voice cloning limit (${limitCheck.limit}). Upgrade your plan to create more voice clones.`,
-              limit: limitCheck.limit,
-              currentUsage: limitCheck.currentUsage,
-              remaining: limitCheck.remaining,
-              plan: limitCheck.plan,
-              upgradeRequired: true
-            });
+            // Different response based on whether they need subscription or hit limit
+            if (limitCheck.needsSubscription) {
+              return res.status(403).json({
+                error: 'Subscription required',
+                message: 'You need an active subscription to use voice cloning. Please subscribe to continue.',
+                hasSubscription: false,
+                needsSubscription: true,
+                redirectToPricing: true
+              });
+            } else if (limitCheck.limitReached) {
+              return res.status(403).json({
+                error: 'Limit reached',
+                message: limitCheck.message || `You have reached your voice cloning limit (${limitCheck.limit}). Upgrade your plan to create more voice clones.`,
+                limit: limitCheck.limit,
+                currentUsage: limitCheck.currentUsage,
+                remaining: limitCheck.remaining,
+                plan: limitCheck.plan,
+                hasSubscription: true,
+                limitReached: true,
+                redirectToPricing: true
+              });
+            }
           }
         }
 

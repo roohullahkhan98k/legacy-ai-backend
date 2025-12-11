@@ -85,11 +85,30 @@ class FeatureLimitService {
   }
 
   /**
-   * Check if user can use a feature (returns { allowed, remaining, limit, currentUsage })
+   * Check if user can use a feature (returns { allowed, remaining, limit, currentUsage, hasSubscription, needsSubscription, limitReached })
    */
   async checkLimit(userId, featureName) {
     try {
       const planType = await this.getUserPlan(userId);
+      
+      // Check if user has active subscription
+      const hasSubscription = planType !== 'free';
+      
+      // If no subscription, block access
+      if (!hasSubscription) {
+        return {
+          allowed: false,
+          remaining: 0,
+          limit: 0,
+          currentUsage: 0,
+          plan: 'free',
+          hasSubscription: false,
+          needsSubscription: true,
+          limitReached: false,
+          message: 'Subscription required to use this feature'
+        };
+      }
+      
       const limit = await this.getFeatureLimit(planType, featureName);
       const currentUsage = await this.getUserUsage(userId, featureName);
 
@@ -100,29 +119,40 @@ class FeatureLimitService {
           remaining: -1, // unlimited
           limit: -1,
           currentUsage: currentUsage,
-          plan: planType
+          plan: planType,
+          hasSubscription: true,
+          needsSubscription: false,
+          limitReached: false
         };
       }
 
       const remaining = Math.max(0, limit.limit_value - currentUsage);
       const allowed = currentUsage < limit.limit_value;
+      const limitReached = !allowed;
 
       return {
         allowed,
         remaining,
         limit: limit.limit_value,
         currentUsage,
-        plan: planType
+        plan: planType,
+        hasSubscription: true,
+        needsSubscription: false,
+        limitReached: limitReached,
+        message: limitReached ? `You have reached your ${featureName} limit (${limit.limit_value}). Upgrade your plan to continue.` : null
       };
     } catch (error) {
       console.error(`[FeatureLimit] Error checking limit for user ${userId}, feature ${featureName}:`, error);
-      // Fail open - allow usage if there's an error
+      // Fail closed - block usage if there's an error (safer)
       return {
-        allowed: true,
-        remaining: -1,
-        limit: -1,
+        allowed: false,
+        remaining: 0,
+        limit: 0,
         currentUsage: 0,
         plan: 'free',
+        hasSubscription: false,
+        needsSubscription: true,
+        limitReached: false,
         error: error.message
       };
     }
