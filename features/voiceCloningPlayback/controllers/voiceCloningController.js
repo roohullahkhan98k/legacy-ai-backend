@@ -405,6 +405,12 @@ class VoiceCloningController {
             }
           });
           console.log('✅ Local voice deleted from DB');
+          
+          // Refund usage count
+          if (userId) {
+            const featureLimitService = require('../../subscriptionService/services/FeatureLimitService');
+            await featureLimitService.refundUsage(userId, 'voice_clones');
+          }
         } else {
           return res.status(404).json({
             error: 'Voice not found',
@@ -433,6 +439,10 @@ class VoiceCloningController {
               }
             });
             console.log('✅ Voice deleted from DB for user:', userId);
+            
+            // Refund usage count
+            const featureLimitService = require('../../subscriptionService/services/FeatureLimitService');
+            await featureLimitService.refundUsage(userId, 'voice_clones');
           } catch (dbError) {
             console.warn('⚠️ Failed to delete voice from DB:', dbError.message);
           }

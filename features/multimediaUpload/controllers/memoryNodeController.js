@@ -286,6 +286,11 @@ class MemoryNodeController {
 
       if (deleted > 0) {
         console.log('✅ [Multimedia] Memory node deleted:', { id: nodeId });
+        
+        // Refund usage count
+        const featureLimitService = require('../../subscriptionService/services/FeatureLimitService');
+        await featureLimitService.refundUsage(userId, 'multimedia_uploads');
+        
         res.json({
           success: true,
           message: 'Memory node deleted successfully'

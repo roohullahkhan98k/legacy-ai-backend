@@ -222,6 +222,12 @@ const deleteAvatar = handleAsync(async (req, res) => {
   
   console.log('✅ Avatar deleted from PostgreSQL - user:', userId, 'avatar:', avatarId);
   
+  // Refund usage count
+  if (userId) {
+    const featureLimitService = require('../../subscriptionService/services/FeatureLimitService');
+    await featureLimitService.refundUsage(userId, 'avatar_generations');
+  }
+  
   return res.json({ ok: true, removed: true });
 });
 

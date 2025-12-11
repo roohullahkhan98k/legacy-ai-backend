@@ -218,6 +218,47 @@ class FeatureLimitService {
   }
 
   /**
+   * Refund feature usage (decrement count) when item is deleted
+   * Note: Interview sessions are NOT refunded as they're counted when started
+   */
+  async refundUsage(userId, featureName) {
+    try {
+      // Don't refund interview sessions - they're counted when started, not when deleted
+      if (featureName === 'interview_sessions') {
+        console.log(`[FeatureLimit] Skipping refund for ${featureName} - not refundable`);
+        return;
+      }
+
+      const { periodStart, periodEnd } = this.getCurrentPeriod();
+
+      // Find usage record for current period
+      const usage = await UserFeatureUsage.findOne({
+        where: {
+          user_id: userId,
+          feature_name: featureName,
+          period_start: periodStart,
+          period_end: periodEnd
+        }
+      });
+
+      if (usage && usage.usage_count > 0) {
+        // Decrement usage count (don't go below 0)
+        await usage.update({
+          usage_count: Math.max(0, usage.usage_count - 1)
+        });
+        console.log(`✅ [FeatureLimit] Refunded 1 usage for user ${userId}, feature ${featureName}. New count: ${usage.usage_count - 1}`);
+      } else {
+        console.log(`⚠️  [FeatureLimit] No usage record found to refund for user ${userId}, feature ${featureName}`);
+      }
+
+      return usage;
+    } catch (error) {
+      console.error(`[FeatureLimit] Error refunding usage for user ${userId}, feature ${featureName}:`, error);
+      // Don't throw - refund failure shouldn't block deletion
+    }
+  }
+
+  /**
    * Handle plan change - adjust usage based on new plan limits
    * When user switches plans mid-month, calculate remaining based on new plan minus what was used
    */

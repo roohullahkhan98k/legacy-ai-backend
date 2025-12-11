@@ -461,11 +461,19 @@ exports.deleteMemory = async (req, res) => {
 		const { id } = req.params;
 		if (!id) return res.status(400).json({ error: 'id is required' });
 		
+		const userId = req.user?.id;
+		
 		// Delete from PostgreSQL
 		await MemoryNode.destroy({ where: { id } });
 		
 		// Delete from ChromaDB
 		await deleteByIds(MEMORY_COLLECTION, [ id ]);
+		
+		// Refund usage count
+		if (userId) {
+			const featureLimitService = require('../../subscriptionService/services/FeatureLimitService');
+			await featureLimitService.refundUsage(userId, 'memory_graph_operations');
+		}
 		
 		return res.json({ ok: true, id });
 	} catch (err) {
