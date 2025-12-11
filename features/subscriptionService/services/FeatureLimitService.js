@@ -24,14 +24,21 @@ class FeatureLimitService {
     });
 
     if (!subscription) {
+      console.log(`[FeatureLimit] No subscription found for user ${userId} - returning free`);
       return 'free';
     }
 
+    console.log(`[FeatureLimit] Found subscription for user ${userId}: plan=${subscription.plan_type}, status=${subscription.status}, cancel_at_period_end=${subscription.cancel_at_period_end}`);
+
     // Check if subscription is active
+    // If cancel_at_period_end is true, user still has access until period ends (status should still be 'active' from Stripe)
     if (subscription.status === 'active' || subscription.status === 'trialing') {
+      console.log(`[FeatureLimit] User ${userId} has active subscription: ${subscription.plan_type}`);
       return subscription.plan_type;
     }
 
+    // If subscription exists but status is not active, log it for debugging
+    console.log(`[FeatureLimit] User ${userId} has subscription but status is '${subscription.status}' - returning free`);
     return 'free';
   }
 
@@ -39,6 +46,19 @@ class FeatureLimitService {
    * Get feature limit for a plan
    */
   async getFeatureLimit(planType, featureName) {
+    // Handle 'free' plan without querying database (not in ENUM)
+    if (planType === 'free') {
+      const defaults = {
+        voice_clones: 0,
+        avatar_generations: 0,
+        memory_graph_operations: 0,
+        interview_sessions: 0,
+        multimedia_uploads: 0
+      };
+      return { limit_value: defaults[featureName] ?? 0, limit_type: 'monthly' };
+    }
+
+    // Query database for paid plans
     const limit = await FeatureLimit.findOne({
       where: {
         plan_type: planType,
@@ -47,9 +67,8 @@ class FeatureLimitService {
     });
 
     if (!limit) {
-      // Default limits if not configured
+      // Default limits if not configured in database
       const defaults = {
-        free: { voice_clones: 0, avatar_generations: 0, memory_graph_operations: 0, interview_sessions: 0, multimedia_uploads: 0 },
         personal: { voice_clones: 5, avatar_generations: 5, memory_graph_operations: 50, interview_sessions: 10, multimedia_uploads: 20 },
         premium: { voice_clones: 20, avatar_generations: 20, memory_graph_operations: 200, interview_sessions: 50, multimedia_uploads: 100 },
         ultimate: { voice_clones: -1, avatar_generations: -1, memory_graph_operations: -1, interview_sessions: -1, multimedia_uploads: -1 }
