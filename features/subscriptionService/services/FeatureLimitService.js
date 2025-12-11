@@ -69,7 +69,7 @@ class FeatureLimitService {
     if (!limit) {
       // Default limits if not configured in database
       const defaults = {
-        personal: { voice_clones: 5, avatar_generations: 5, memory_graph_operations: 50, interview_sessions: 10, multimedia_uploads: 20 },
+        personal: { voice_clones: 1, avatar_generations: 1, memory_graph_operations: 1, interview_sessions: 1, multimedia_uploads: 1 },
         premium: { voice_clones: 20, avatar_generations: 20, memory_graph_operations: 200, interview_sessions: 50, multimedia_uploads: 100 },
         ultimate: { voice_clones: -1, avatar_generations: -1, memory_graph_operations: -1, interview_sessions: -1, multimedia_uploads: -1 }
       };
@@ -319,11 +319,11 @@ class FeatureLimitService {
     try {
       const defaults = [
         // Personal plan
-        { plan_type: 'personal', feature_name: 'voice_clones', limit_value: 5, limit_type: 'monthly' },
-        { plan_type: 'personal', feature_name: 'avatar_generations', limit_value: 5, limit_type: 'monthly' },
-        { plan_type: 'personal', feature_name: 'memory_graph_operations', limit_value: 50, limit_type: 'monthly' },
-        { plan_type: 'personal', feature_name: 'interview_sessions', limit_value: 10, limit_type: 'monthly' },
-        { plan_type: 'personal', feature_name: 'multimedia_uploads', limit_value: 20, limit_type: 'monthly' },
+        { plan_type: 'personal', feature_name: 'voice_clones', limit_value: 1, limit_type: 'monthly' },
+        { plan_type: 'personal', feature_name: 'avatar_generations', limit_value: 1, limit_type: 'monthly' },
+        { plan_type: 'personal', feature_name: 'memory_graph_operations', limit_value: 1, limit_type: 'monthly' },
+        { plan_type: 'personal', feature_name: 'interview_sessions', limit_value: 1, limit_type: 'monthly' },
+        { plan_type: 'personal', feature_name: 'multimedia_uploads', limit_value: 1, limit_type: 'monthly' },
         
         // Premium plan
         { plan_type: 'premium', feature_name: 'voice_clones', limit_value: 20, limit_type: 'monthly' },
