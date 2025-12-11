@@ -89,8 +89,7 @@ exports.createMemory = async (req, res) => {
 		}
 
 		const memoryId = id || generateId('memory');
-		// Get user from middleware (req.user set by authenticateToken)
-		const userId = req.user?.id || null;
+		// userId already declared above for limit check
 		const mediaCombined = Array.isArray(media) ? media.slice() : [];
 		for (const p of uploaded) mediaCombined.push(p);
 		const tagsCombined = Array.isArray(tags) ? tags : [];
