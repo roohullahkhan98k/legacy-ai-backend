@@ -356,9 +356,19 @@ class StripeService {
 
       console.log(`✅ [CANCEL] Stripe subscription updated - Status: ${canceledSubscription.status}`);
 
+      // Safely convert Unix timestamps to Date objects
+      const periodStart = canceledSubscription.current_period_start 
+        ? new Date(canceledSubscription.current_period_start * 1000)
+        : subscription.current_period_start;
+      const periodEnd = canceledSubscription.current_period_end 
+        ? new Date(canceledSubscription.current_period_end * 1000)
+        : subscription.current_period_end;
+
       await subscription.update({
         cancel_at_period_end: true,
-        status: canceledSubscription.status
+        status: canceledSubscription.status,
+        current_period_start: periodStart,
+        current_period_end: periodEnd
       });
 
       console.log(`✅ [CANCEL] Database updated - Subscription will cancel at period end`);
@@ -545,6 +555,35 @@ class StripeService {
         console.log(`ℹ️  [BILLING] No upcoming invoice: ${error.message}`);
       }
 
+      // Fetch fresh subscription data from Stripe if dates are missing
+      let currentPeriodStart = subscription.current_period_start;
+      let currentPeriodEnd = subscription.current_period_end;
+      
+      if ((!currentPeriodStart || !currentPeriodEnd) && subscription.stripe_subscription_id) {
+        try {
+          console.log(`🔄 [BILLING] Fetching fresh subscription data from Stripe`);
+          const stripeSubscription = await stripe.subscriptions.retrieve(subscription.stripe_subscription_id);
+          
+          if (stripeSubscription.current_period_start && !currentPeriodStart) {
+            currentPeriodStart = new Date(stripeSubscription.current_period_start * 1000);
+          }
+          if (stripeSubscription.current_period_end && !currentPeriodEnd) {
+            currentPeriodEnd = new Date(stripeSubscription.current_period_end * 1000);
+          }
+          
+          // Update database with fresh dates if we got them
+          if (currentPeriodStart && currentPeriodEnd) {
+            await subscription.update({
+              current_period_start: currentPeriodStart,
+              current_period_end: currentPeriodEnd
+            });
+            console.log(`✅ [BILLING] Updated database with fresh period dates`);
+          }
+        } catch (error) {
+          console.log(`⚠️  [BILLING] Could not fetch fresh subscription data: ${error.message}`);
+        }
+      }
+
       console.log(`✅ [BILLING] Dashboard data retrieved`);
 
       return {
@@ -553,8 +592,8 @@ class StripeService {
           id: subscription.id,
           plan: subscription.plan_type,
           status: subscription.status,
-          currentPeriodStart: subscription.current_period_start,
-          currentPeriodEnd: subscription.current_period_end,
+          currentPeriodStart: currentPeriodStart,
+          currentPeriodEnd: currentPeriodEnd,
           cancelAtPeriodEnd: subscription.cancel_at_period_end,
           canceledAt: subscription.canceled_at
         },
