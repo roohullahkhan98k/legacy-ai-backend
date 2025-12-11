@@ -299,14 +299,26 @@ class StripeService {
       console.log(`✅ [DB] Subscription CREATED - ID: ${subscription.id}, User: ${userId}, Plan: ${planType}, Status: ${status}`);
     } else {
       console.log(`🔄 [DB] Subscription EXISTS - Updating - ID: ${subscription.id}`);
-      await subscription.update({
+      
+      // Build update object - only include period dates if they have valid values
+      // This prevents overwriting valid dates with null when webhooks don't include them
+      const updateData = {
         plan_type: planType,
         status: status,
-        current_period_start: periodStart,
-        current_period_end: periodEnd,
         cancel_at_period_end: stripeSubscription.cancel_at_period_end || false,
         metadata: stripeSubscription
-      });
+      };
+      
+      // Only update period dates if we have valid values from Stripe
+      // This preserves existing dates when webhooks don't include them
+      if (periodStart) {
+        updateData.current_period_start = periodStart;
+      }
+      if (periodEnd) {
+        updateData.current_period_end = periodEnd;
+      }
+      
+      await subscription.update(updateData);
       console.log(`✅ [DB] Subscription UPDATED - ID: ${subscription.id}, Plan: ${planType}, Status: ${status}`);
     }
 
