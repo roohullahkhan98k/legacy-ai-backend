@@ -68,7 +68,6 @@ class StripeService {
         ],
         mode: 'subscription',
         subscription_data: {
-          billing_cycle_anchor: 'now',
           metadata: {
             userId: userId.toString(),
             planType: planType
