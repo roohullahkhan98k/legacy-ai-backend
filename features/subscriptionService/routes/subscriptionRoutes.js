@@ -15,6 +15,7 @@ router.get('/plans', subscriptionController.getPlans.bind(subscriptionController
 router.get('/status', authenticateToken, subscriptionController.getStatus.bind(subscriptionController));
 router.get('/billing', authenticateToken, subscriptionController.getBilling.bind(subscriptionController));
 router.get('/usage', authenticateToken, usageController.getUsage.bind(usageController));
+router.get('/check-downgrade', authenticateToken, subscriptionController.checkDowngrade.bind(subscriptionController));
 router.post('/checkout', authenticateToken, subscriptionController.createCheckout.bind(subscriptionController));
 router.post('/change-plan', authenticateToken, subscriptionController.changePlan.bind(subscriptionController));
 router.post('/cancel', authenticateToken, subscriptionController.cancel.bind(subscriptionController));

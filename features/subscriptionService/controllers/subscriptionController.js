@@ -90,6 +90,38 @@ class SubscriptionController {
   }
 
   /**
+   * Get downgrade preview - shows what limits the new plan has and what needs cleanup
+   * GET /api/subscription/check-downgrade?planType=personal
+   */
+  async checkDowngrade(req, res) {
+    try {
+      const { planType } = req.query;
+      const userId = req.user.id;
+
+      if (!planType || !['personal', 'premium', 'ultimate'].includes(planType)) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid plan type. Must be: personal, premium, or ultimate'
+        });
+      }
+
+      const featureLimitService = require('../services/FeatureLimitService');
+      const preview = await featureLimitService.getDowngradePreview(userId, planType);
+
+      res.json({
+        success: true,
+        ...preview
+      });
+    } catch (error) {
+      console.error(`❌ [CHECK_DOWNGRADE] Error for user ${req.user.id}:`, error.message);
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+  }
+
+  /**
    * Change subscription plan (upgrade/downgrade)
    * POST /api/subscription/change-plan
    */

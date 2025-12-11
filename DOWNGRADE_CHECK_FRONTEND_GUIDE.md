@@ -4,7 +4,157 @@
 
 When a user tries to downgrade their subscription plan, the backend checks if their current usage exceeds the new plan's limits. If it does, the downgrade is blocked and the frontend receives detailed information about which features need cleanup.
 
-## API Endpoint
+**IMPORTANT**: Always call the pre-check endpoint BEFORE attempting downgrade to show users what limits they'll have and what needs cleanup.
+
+## API Endpoints
+
+### 1. Pre-Check Downgrade (GET) - **USE THIS FIRST**
+
+**GET** `/api/subscription/check-downgrade?planType=personal`
+
+Check what the new plan limits are and what needs cleanup BEFORE attempting downgrade.
+
+#### Response
+```json
+{
+  "success": true,
+  "isDowngrade": true,
+  "currentPlan": "premium",
+  "targetPlan": "personal",
+  "canDowngrade": false,
+  "needsCleanup": true,
+  "cleanupRequired": true,
+  "message": "⚠️ Cleanup Required: You have 2 feature(s) that exceed the personal plan limits. Please delete 2 item(s) before downgrading.",
+  "totalOverage": 2,
+  "comparison": [
+    {
+      "feature": "voice_clones",
+      "currentUsage": 2,
+      "currentLimit": 2,
+      "newLimit": 1,
+      "overage": 1,
+      "needsCleanup": true
+    },
+    {
+      "feature": "avatar_generations",
+      "currentUsage": 2,
+      "currentLimit": 2,
+      "newLimit": 1,
+      "overage": 1,
+      "needsCleanup": true
+    },
+    {
+      "feature": "memory_graph_operations",
+      "currentUsage": 0,
+      "currentLimit": 2,
+      "newLimit": 1,
+      "overage": 0,
+      "needsCleanup": false
+    },
+    {
+      "feature": "interview_sessions",
+      "currentUsage": 0,
+      "currentLimit": 2,
+      "newLimit": 1,
+      "overage": 0,
+      "needsCleanup": false
+    },
+    {
+      "feature": "multimedia_uploads",
+      "currentUsage": 0,
+      "currentLimit": 2,
+      "newLimit": 1,
+      "overage": 0,
+      "needsCleanup": false
+    }
+  ],
+  "warnings": [
+    {
+      "feature": "voice_clones",
+      "currentUsage": 2,
+      "newLimit": 1,
+      "overage": 1,
+      "message": "You have 2 voice clones, but personal plan only allows 1. Please delete 1 item(s) before downgrading."
+    },
+    {
+      "feature": "avatar_generations",
+      "currentUsage": 2,
+      "newLimit": 1,
+      "overage": 1,
+      "message": "You have 2 avatar generations, but personal plan only allows 1. Please delete 1 item(s) before downgrading."
+    }
+  ],
+  "featuresExceedingLimit": [
+    {
+      "feature": "voice_clones",
+      "currentUsage": 2,
+      "currentLimit": 2,
+      "newLimit": 1,
+      "overage": 1,
+      "needsCleanup": true
+    },
+    {
+      "feature": "avatar_generations",
+      "currentUsage": 2,
+      "currentLimit": 2,
+      "newLimit": 1,
+      "overage": 1,
+      "needsCleanup": true
+    }
+  ],
+  "featuresWithinLimit": [
+    {
+      "feature": "memory_graph_operations",
+      "currentUsage": 0,
+      "currentLimit": 2,
+      "newLimit": 1,
+      "overage": 0,
+      "needsCleanup": false
+    },
+    {
+      "feature": "interview_sessions",
+      "currentUsage": 0,
+      "currentLimit": 2,
+      "newLimit": 1,
+      "overage": 0,
+      "needsCleanup": false
+    },
+    {
+      "feature": "multimedia_uploads",
+      "currentUsage": 0,
+      "currentLimit": 2,
+      "newLimit": 1,
+      "overage": 0,
+      "needsCleanup": false
+    }
+  ],
+  "needsCleanup": true,
+  "cleanupRequired": true
+}
+```
+
+#### Example Usage
+```javascript
+// Check downgrade BEFORE showing downgrade button
+async function checkDowngradePreview(planType) {
+  const response = await fetch(`/api/subscription/check-downgrade?planType=${planType}`, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  });
+
+  const data = await response.json();
+  
+  if (data.isDowngrade) {
+    // Show preview modal with limits and cleanup requirements
+    showDowngradePreview(data);
+  }
+  
+  return data;
+}
+```
+
+### 2. Change Plan (POST) - **CALL THIS AFTER PREVIEW**
 
 **POST** `/api/subscription/change-plan`
 
@@ -372,17 +522,36 @@ Each warning in the `warnings` array contains:
 - `overage`: Number of items that need to be deleted (currentUsage - newLimit)
 - `message`: Human-readable message explaining what needs to be done
 
-## User Flow
+## User Flow (Recommended)
+
+1. **User clicks "Downgrade to Personal" button**
+2. **Frontend calls `/api/subscription/check-downgrade?planType=personal`** (PRE-CHECK)
+3. **Show preview modal** with:
+   - New plan limits (what they'll get)
+   - Current usage (what they have)
+   - Cleanup requirements (what needs to be deleted)
+4. **If cleanup needed:**
+   - Show "Go to Cleanup" button
+   - User deletes excess items
+   - User clicks downgrade again → goes back to step 2
+5. **If safe to downgrade:**
+   - Show "Confirm Downgrade" button
+   - User confirms → Frontend calls `/api/subscription/change-plan`
+   - Downgrade succeeds
+
+## User Flow (Alternative - Without Pre-Check)
 
 1. User clicks "Downgrade to Personal" button
-2. Frontend calls `/api/subscription/change-plan`
-3. If downgrade is blocked:
+2. Frontend calls `/api/subscription/change-plan` directly
+3. If downgrade is blocked (403 error):
    - Show modal with list of features that need cleanup
    - Display how many items need to be deleted for each feature
    - Provide "Go to Cleanup" button to navigate to deletion pages
 4. User deletes excess items
 5. User tries downgrade again
 6. Downgrade succeeds if usage is within limits
+
+**Note**: Using the pre-check endpoint (first flow) is recommended as it shows users the new limits BEFORE they attempt downgrade.
 
 ## Testing
 

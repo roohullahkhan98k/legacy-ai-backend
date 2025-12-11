@@ -259,6 +259,89 @@ class FeatureLimitService {
   }
 
   /**
+   * Get downgrade preview - shows new plan limits and current usage comparison
+   * Use this BEFORE attempting downgrade to show user what they need to clean up
+   */
+  async getDowngradePreview(userId, targetPlan) {
+    try {
+      const currentPlan = await this.getUserPlan(userId);
+      const features = ['voice_clones', 'avatar_generations', 'memory_graph_operations', 'interview_sessions', 'multimedia_uploads'];
+      
+      const planOrder = { personal: 1, premium: 2, ultimate: 3 };
+      const isDowngrade = planOrder[targetPlan] < planOrder[currentPlan];
+      
+      if (!isDowngrade) {
+        return {
+          isDowngrade: false,
+          message: 'This is not a downgrade',
+          currentPlan,
+          targetPlan
+        };
+      }
+
+      const comparison = [];
+      const warnings = [];
+      let totalOverage = 0;
+
+      for (const featureName of features) {
+        const currentUsage = await this.getUserUsage(userId, featureName);
+        const currentLimit = await this.getFeatureLimit(currentPlan, featureName);
+        const newLimit = await this.getFeatureLimit(targetPlan, featureName);
+
+        const featureData = {
+          feature: featureName,
+          currentUsage,
+          currentLimit: currentLimit.limit_value,
+          newLimit: newLimit.limit_value,
+          overage: 0,
+          needsCleanup: false
+        };
+
+        // Check if usage exceeds new limit
+        if (newLimit.limit_value !== -1 && currentUsage > newLimit.limit_value) {
+          featureData.overage = currentUsage - newLimit.limit_value;
+          featureData.needsCleanup = true;
+          totalOverage += featureData.overage;
+          
+          warnings.push({
+            feature: featureName,
+            currentUsage,
+            newLimit: newLimit.limit_value,
+            overage: featureData.overage,
+            message: `You have ${currentUsage} ${featureName.replace(/_/g, ' ')}, but ${targetPlan} plan only allows ${newLimit.limit_value}. Please delete ${featureData.overage} item(s) before downgrading.`
+          });
+        }
+
+        comparison.push(featureData);
+      }
+
+      // Separate features that exceed limit for clearer display
+      const featuresExceedingLimit = comparison.filter(f => f.needsCleanup);
+      const featuresWithinLimit = comparison.filter(f => !f.needsCleanup);
+
+      return {
+        isDowngrade: true,
+        currentPlan,
+        targetPlan,
+        comparison,
+        warnings,
+        featuresExceedingLimit, // Features that need cleanup
+        featuresWithinLimit,     // Features that are safe
+        totalOverage,
+        canDowngrade: warnings.length === 0,
+        needsCleanup: warnings.length > 0,
+        cleanupRequired: warnings.length > 0,
+        message: warnings.length > 0
+          ? `⚠️ Cleanup Required: You have ${warnings.length} feature(s) that exceed the ${targetPlan} plan limits. Please delete ${totalOverage} item(s) before downgrading.`
+          : `✅ You can safely downgrade to ${targetPlan} plan. Your current usage is within the new plan limits.`
+      };
+    } catch (error) {
+      console.error(`[FeatureLimit] Error getting downgrade preview for user ${userId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
    * Check if user can downgrade to a new plan
    * Returns warnings if usage exceeds new plan limits
    */
