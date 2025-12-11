@@ -48,7 +48,7 @@ const startImageToModel = handleAsync(async (req, res) => {
   
   if (!req.file) return res.status(400).json({ error: 'image file is required' });
   
-  const userId = req.user?.id;
+  // userId already declared above for limit check
   if (!userId) {
     return res.status(401).json({ error: 'Authentication required' });
   }
