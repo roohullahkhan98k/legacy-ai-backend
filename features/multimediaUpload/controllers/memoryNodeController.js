@@ -19,6 +19,23 @@ class MemoryNodeController {
         });
       }
 
+      // Check feature limit before creating memory node (multimedia uploads are counted per node, not per photo)
+      const featureLimitService = require('../../subscriptionService/services/FeatureLimitService');
+      const limitCheck = await featureLimitService.checkLimit(userId, 'multimedia_uploads');
+      
+      if (!limitCheck.allowed) {
+        return res.status(403).json({
+          success: false,
+          error: 'Limit reached',
+          message: `You have reached your multimedia upload limit (${limitCheck.limit} nodes per month). Upgrade your plan to create more memory nodes.`,
+          limit: limitCheck.limit,
+          currentUsage: limitCheck.currentUsage,
+          remaining: limitCheck.remaining,
+          plan: limitCheck.plan,
+          upgradeRequired: true
+        });
+      }
+
       const nodeId = `node_${Date.now()}_${randomUUID()}`;
 
       const node = await MultimediaMemoryNode.create({
@@ -28,6 +45,13 @@ class MemoryNodeController {
         description: description || '',
         type: type || 'event',
         metadata: metadata
+      });
+
+      // Record usage after successful creation (1 per node, regardless of how many photos are linked)
+      await featureLimitService.recordUsage(userId, 'multimedia_uploads', {
+        node_id: node.node_id,
+        node_title: title,
+        created_at: new Date()
       });
 
       console.log('✅ [Multimedia] Memory node created:', { id: node.id, title: node.title, type: node.type, user: userId });

@@ -440,8 +440,18 @@ class StripeService {
 
       console.log(`✅ [CHANGE_PLAN] Stripe subscription updated - New plan: ${newPlanType}`);
 
+      // Get old plan before updating
+      const oldPlan = subscription.plan_type;
+
       // Update database
       await this.createOrUpdateSubscription(userId, updatedSubscription, newPlanType);
+
+      // Handle feature limit adjustments for plan change
+      if (oldPlan !== newPlanType) {
+        const featureLimitService = require('./FeatureLimitService');
+        await featureLimitService.handlePlanChange(userId, oldPlan, newPlanType);
+        console.log(`✅ [CHANGE_PLAN] Feature limits adjusted for plan change: ${oldPlan} -> ${newPlanType}`);
+      }
 
       console.log(`✅ [CHANGE_PLAN] Plan changed successfully to ${newPlanType}`);
       return {

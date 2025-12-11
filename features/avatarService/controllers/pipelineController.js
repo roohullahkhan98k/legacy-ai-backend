@@ -18,6 +18,27 @@ function handleAsync(handler) {
 // POST /api/avatar/pipeline/image -> { jobId }
 const uploadImageMiddleware = uploadImage.single('image');
 const startImageToModel = handleAsync(async (req, res) => {
+  const userId = req.user?.id;
+  
+  // Check feature limit before processing
+  if (userId) {
+    const featureLimitService = require('../../subscriptionService/services/FeatureLimitService');
+    const limitCheck = await featureLimitService.checkLimit(userId, 'avatar_generations');
+    
+    if (!limitCheck.allowed) {
+      return res.status(403).json({
+        ok: false,
+        error: 'Limit reached',
+        message: `You have reached your avatar generation limit (${limitCheck.limit}). Upgrade your plan to generate more avatars.`,
+        limit: limitCheck.limit,
+        currentUsage: limitCheck.currentUsage,
+        remaining: limitCheck.remaining,
+        plan: limitCheck.plan,
+        upgradeRequired: true
+      });
+    }
+  }
+  
   console.log('📤 [FRONTEND->BACKEND] Image upload received:', {
     filename: req.file?.originalname,
     size: req.file?.size,
@@ -73,6 +94,16 @@ const startImageToModel = handleAsync(async (req, res) => {
             }
           });
           
+          // Record usage after successful creation
+          if (userId) {
+            const featureLimitService = require('../../subscriptionService/services/FeatureLimitService');
+            await featureLimitService.recordUsage(userId, 'avatar_generations', {
+              avatar_id: dbAvatar.id,
+              avatar_name: avatarName,
+              created_at: new Date()
+            });
+          }
+          
           console.log('✅ [AVATAR] Avatar saved to PostgreSQL:', { id: dbAvatar.id, name: dbAvatar.name, user: userId });
           updateJob(job.id, { status: 'completed', result: { avatarId: dbAvatar.id, modelUrl: modelUrl } });
           console.log('✅ [JOB] Job completed successfully:', job.id);
@@ -115,6 +146,16 @@ const startImageToModel = handleAsync(async (req, res) => {
                 source: 'pipeline_image_to_model_external'
               }
             });
+            
+            // Record usage after successful creation
+            if (userId) {
+              const featureLimitService = require('../../subscriptionService/services/FeatureLimitService');
+              await featureLimitService.recordUsage(userId, 'avatar_generations', {
+                avatar_id: dbAvatar.id,
+                avatar_name: avatarName,
+                created_at: new Date()
+              });
+            }
             
             console.log('✅ [AVATAR] Avatar saved to PostgreSQL:', { id: dbAvatar.id, name: dbAvatar.name });
             updateJob(job.id, { status: 'completed', result: { avatarId: dbAvatar.id, modelUrl: modelUrl } });

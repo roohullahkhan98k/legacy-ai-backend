@@ -13,7 +13,37 @@ class InterviewController {
         return res.status(400).json({ success: false, error: 'session_id required' });
       }
 
+      // Check feature limit before starting interview
+      if (userId) {
+        const featureLimitService = require('../../subscriptionService/services/FeatureLimitService');
+        const limitCheck = await featureLimitService.checkLimit(userId, 'interview_sessions');
+        
+        if (!limitCheck.allowed) {
+          return res.status(403).json({
+            success: false,
+            error: 'Limit reached',
+            message: `You have reached your interview sessions limit (${limitCheck.limit}). Upgrade your plan to start more interviews.`,
+            limit: limitCheck.limit,
+            currentUsage: limitCheck.currentUsage,
+            remaining: limitCheck.remaining,
+            plan: limitCheck.plan,
+            upgradeRequired: true
+          });
+        }
+      }
+
       const result = await interviewService.startInterview(session_id, userId);
+      
+      // Record usage after successful start
+      if (userId && result.success) {
+        const featureLimitService = require('../../subscriptionService/services/FeatureLimitService');
+        await featureLimitService.recordUsage(userId, 'interview_sessions', {
+          session_id: session_id,
+          interview_id: result.interview_id,
+          started_at: new Date()
+        });
+      }
+      
       console.log('[Interview] Start success:', result);
       res.json(result);
     } catch (error) {

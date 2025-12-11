@@ -80,6 +80,32 @@ class VoiceCloningController {
           });
         }
 
+        // Check feature limit
+        const userId = req.user?.id;
+        if (userId) {
+          const featureLimitService = require('../../subscriptionService/services/FeatureLimitService');
+          const limitCheck = await featureLimitService.checkLimit(userId, 'voice_clones');
+          
+          if (!limitCheck.allowed) {
+            // Clean up uploaded file
+            try {
+              await fs.unlink(req.file.path);
+            } catch (cleanupError) {
+              console.warn('Warning: Could not clean up uploaded file:', cleanupError.message);
+            }
+            
+            return res.status(403).json({
+              error: 'Limit reached',
+              message: `You have reached your voice cloning limit (${limitCheck.limit}). Upgrade your plan to create more voice clones.`,
+              limit: limitCheck.limit,
+              currentUsage: limitCheck.currentUsage,
+              remaining: limitCheck.remaining,
+              plan: limitCheck.plan,
+              upgradeRequired: true
+            });
+          }
+        }
+
         try {
           // Read the uploaded file
           const audioBuffer = await fs.readFile(req.file.path);
@@ -94,7 +120,6 @@ class VoiceCloningController {
           );
           
           // Save to PostgreSQL
-          const userId = req.user?.id;
           const voiceIdToSave = result.voiceId || result.voice_id;
           
           console.log('[VoiceCloning] Clone result - voiceId:', voiceIdToSave, 'userId:', userId, 'name:', voiceName);
@@ -114,6 +139,15 @@ class VoiceCloningController {
                   isLocalClone: true
                 }
               });
+              
+              // Record usage after successful creation
+              const featureLimitService = require('../../subscriptionService/services/FeatureLimitService');
+              await featureLimitService.recordUsage(userId, 'voice_clones', {
+                    voice_id: voiceIdToSave,
+                    voice_name: voiceName,
+                    created_at: new Date()
+                  });
+              
               console.log('✅ Voice saved to DB - user:', userId, 'voice_id:', voiceIdToSave);
             } catch (dbError) {
               console.error('❌ Failed to save voice to DB:', dbError.message);

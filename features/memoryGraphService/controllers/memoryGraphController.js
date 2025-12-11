@@ -44,6 +44,26 @@ function buildWhereFilter(query) {
 
 exports.createMemory = async (req, res) => {
 	try {
+		const userId = req.user?.id;
+		
+		// Check feature limit before creating memory
+		if (userId) {
+			const featureLimitService = require('../../subscriptionService/services/FeatureLimitService');
+			const limitCheck = await featureLimitService.checkLimit(userId, 'memory_graph_operations');
+			
+			if (!limitCheck.allowed) {
+				return res.status(403).json({
+					success: false,
+					error: 'Limit reached',
+					message: `You have reached your memory graph operations limit (${limitCheck.limit}). Upgrade your plan to create more memories.`,
+					limit: limitCheck.limit,
+					currentUsage: limitCheck.currentUsage,
+					remaining: limitCheck.remaining,
+					plan: limitCheck.plan,
+					upgradeRequired: true
+				});
+			}
+		}
 		console.log('[MemoryGraph] createMemory START - req.user:', req.user ? 'EXISTS' : 'NULL', 'id:', req.user?.id);
 		
 		const {
@@ -123,6 +143,16 @@ exports.createMemory = async (req, res) => {
 			original_language: detectedLanguage, // Milestone 6: Store detected language
 			translated_texts: translatedTexts // Milestone 6: Next 35% - Will be updated async
 		});
+
+		// Record usage after successful creation
+		if (userId) {
+			const featureLimitService = require('../../subscriptionService/services/FeatureLimitService');
+			await featureLimitService.recordUsage(userId, 'memory_graph_operations', {
+				memory_id: memoryId,
+				title: document.substring(0, 100),
+				created_at: new Date()
+			});
+		}
 
 		// Save to ChromaDB
 		await ensureCollection(MEMORY_COLLECTION);

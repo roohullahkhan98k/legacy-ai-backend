@@ -128,6 +128,8 @@ const initializeDatabase = async () => {
     require('../features/avatarService/models/Avatar');
     require('../features/multimediaUpload/models/Multimedia');
     require('../features/subscriptionService/models/Subscription');
+    require('../features/subscriptionService/models/FeatureLimit');
+    require('../features/subscriptionService/models/UserFeatureUsage');
     
     // Sync each model individually to handle errors gracefully
     const models = sequelize.models;
@@ -150,6 +152,14 @@ const initializeDatabase = async () => {
     
     if (errorCount > 0) {
       console.log('⚠️  Some models failed to sync. This is usually okay for existing tables with ENUMs.');
+    }
+    
+    // Initialize default feature limits
+    try {
+      const featureLimitService = require('../features/subscriptionService/services/FeatureLimitService');
+      await featureLimitService.initializeDefaultLimits();
+    } catch (error) {
+      console.warn('⚠️  Failed to initialize default feature limits:', error.message);
     }
   } catch (error) {
     console.error('❌ AI Prototype database synchronization failed:', error);

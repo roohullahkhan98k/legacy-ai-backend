@@ -29,6 +29,23 @@ const createAvatar = handleAsync(async (req, res) => {
     return res.status(401).json({ error: 'Authentication required' });
   }
 
+  // Check feature limit before processing
+  const featureLimitService = require('../../subscriptionService/services/FeatureLimitService');
+  const limitCheck = await featureLimitService.checkLimit(userId, 'avatar_generations');
+  
+  if (!limitCheck.allowed) {
+    return res.status(403).json({
+      ok: false,
+      error: 'Limit reached',
+      message: `You have reached your avatar generation limit (${limitCheck.limit}). Upgrade your plan to generate more avatars.`,
+      limit: limitCheck.limit,
+      currentUsage: limitCheck.currentUsage,
+      remaining: limitCheck.remaining,
+      plan: limitCheck.plan,
+      upgradeRequired: true
+    });
+  }
+
   const name = req.body?.name || path.parse(req.file.originalname).name;
   const description = req.body?.description || '';
   
@@ -53,6 +70,13 @@ const createAvatar = handleAsync(async (req, res) => {
   });
   
   console.log('✅ Avatar saved to PostgreSQL - user:', userId, 'avatar:', dbAvatar.id, 'name:', dbAvatar.name);
+  
+  // Record usage after successful creation
+  await featureLimitService.recordUsage(userId, 'avatar_generations', {
+    avatar_id: dbAvatar.id,
+    avatar_name: name,
+    created_at: new Date()
+  });
   
   // Format response
   const avatar = {

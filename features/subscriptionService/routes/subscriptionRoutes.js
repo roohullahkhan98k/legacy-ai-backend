@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const subscriptionController = require('../controllers/subscriptionController');
+const usageController = require('../controllers/usageController');
 const { authenticateToken } = require('../../../common/middleware/authMiddleware');
 
 // Create separate router for webhook (needs raw body, mounted before JSON parser)
@@ -13,6 +14,7 @@ router.get('/plans', subscriptionController.getPlans.bind(subscriptionController
 // Protected routes (require authentication)
 router.get('/status', authenticateToken, subscriptionController.getStatus.bind(subscriptionController));
 router.get('/billing', authenticateToken, subscriptionController.getBilling.bind(subscriptionController));
+router.get('/usage', authenticateToken, usageController.getUsage.bind(usageController));
 router.post('/checkout', authenticateToken, subscriptionController.createCheckout.bind(subscriptionController));
 router.post('/change-plan', authenticateToken, subscriptionController.changePlan.bind(subscriptionController));
 router.post('/cancel', authenticateToken, subscriptionController.cancel.bind(subscriptionController));
