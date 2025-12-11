@@ -70,7 +70,7 @@ class FeatureLimitService {
       // Default limits if not configured in database
       const defaults = {
         personal: { voice_clones: 1, avatar_generations: 1, memory_graph_operations: 1, interview_sessions: 1, multimedia_uploads: 1 },
-        premium: { voice_clones: 20, avatar_generations: 20, memory_graph_operations: 200, interview_sessions: 50, multimedia_uploads: 100 },
+        premium: { voice_clones: 2, avatar_generations: 2, memory_graph_operations: 2, interview_sessions: 2, multimedia_uploads: 2 },
         ultimate: { voice_clones: -1, avatar_generations: -1, memory_graph_operations: -1, interview_sessions: -1, multimedia_uploads: -1 }
       };
 
@@ -259,6 +259,56 @@ class FeatureLimitService {
   }
 
   /**
+   * Check if user can downgrade to a new plan
+   * Returns warnings if usage exceeds new plan limits
+   */
+  async checkDowngradeAllowed(userId, oldPlan, newPlan) {
+    try {
+      const features = ['voice_clones', 'avatar_generations', 'memory_graph_operations', 'interview_sessions', 'multimedia_uploads'];
+      const warnings = [];
+      const blockedFeatures = [];
+
+      for (const featureName of features) {
+        const currentUsage = await this.getUserUsage(userId, featureName);
+        const newLimit = await this.getFeatureLimit(newPlan, featureName);
+
+        // Skip if new plan is unlimited
+        if (newLimit.limit_value === -1) {
+          continue;
+        }
+
+        // If usage exceeds new plan limit, add warning
+        if (currentUsage > newLimit.limit_value) {
+          const overage = currentUsage - newLimit.limit_value;
+          blockedFeatures.push({
+            feature: featureName,
+            currentUsage,
+            newLimit: newLimit.limit_value,
+            overage,
+            message: `You have ${currentUsage} ${featureName.replace(/_/g, ' ')}, but ${newPlan} plan only allows ${newLimit.limit_value}. Please delete ${overage} item(s) before downgrading.`
+          });
+        }
+      }
+
+      return {
+        allowed: blockedFeatures.length === 0,
+        warnings: blockedFeatures,
+        message: blockedFeatures.length > 0 
+          ? `Cannot downgrade: You have ${blockedFeatures.length} feature(s) that exceed the ${newPlan} plan limits. Please delete items to continue.`
+          : 'Downgrade allowed'
+      };
+    } catch (error) {
+      console.error(`[FeatureLimit] Error checking downgrade for user ${userId}:`, error);
+      // Fail open - allow downgrade if check fails
+      return {
+        allowed: true,
+        warnings: [],
+        message: 'Downgrade check failed, allowing downgrade'
+      };
+    }
+  }
+
+  /**
    * Handle plan change - adjust usage based on new plan limits
    * When user switches plans mid-month, calculate remaining based on new plan minus what was used
    */
@@ -367,11 +417,11 @@ class FeatureLimitService {
         { plan_type: 'personal', feature_name: 'multimedia_uploads', limit_value: 1, limit_type: 'monthly' },
         
         // Premium plan
-        { plan_type: 'premium', feature_name: 'voice_clones', limit_value: 20, limit_type: 'monthly' },
-        { plan_type: 'premium', feature_name: 'avatar_generations', limit_value: 20, limit_type: 'monthly' },
-        { plan_type: 'premium', feature_name: 'memory_graph_operations', limit_value: 200, limit_type: 'monthly' },
-        { plan_type: 'premium', feature_name: 'interview_sessions', limit_value: 50, limit_type: 'monthly' },
-        { plan_type: 'premium', feature_name: 'multimedia_uploads', limit_value: 100, limit_type: 'monthly' },
+        { plan_type: 'premium', feature_name: 'voice_clones', limit_value: 2, limit_type: 'monthly' },
+        { plan_type: 'premium', feature_name: 'avatar_generations', limit_value: 2, limit_type: 'monthly' },
+        { plan_type: 'premium', feature_name: 'memory_graph_operations', limit_value: 2, limit_type: 'monthly' },
+        { plan_type: 'premium', feature_name: 'interview_sessions', limit_value: 2, limit_type: 'monthly' },
+        { plan_type: 'premium', feature_name: 'multimedia_uploads', limit_value: 2, limit_type: 'monthly' },
         
         // Ultimate plan
         { plan_type: 'ultimate', feature_name: 'voice_clones', limit_value: -1, limit_type: 'monthly' },

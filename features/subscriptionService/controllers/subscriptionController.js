@@ -113,6 +113,23 @@ class SubscriptionController {
       res.json(result);
     } catch (error) {
       console.error(`❌ [CHANGE_PLAN] Error for user ${req.user.id}:`, error.message);
+      
+      // Check if error is a downgrade block error
+      try {
+        const errorData = JSON.parse(error.message);
+        if (errorData.error === 'Downgrade not allowed') {
+          return res.status(403).json({
+            success: false,
+            error: errorData.error,
+            message: errorData.message,
+            warnings: errorData.warnings,
+            blockedFeatures: errorData.blockedFeatures
+          });
+        }
+      } catch (parseError) {
+        // Not a JSON error, continue with normal error handling
+      }
+      
       res.status(500).json({
         success: false,
         error: error.message

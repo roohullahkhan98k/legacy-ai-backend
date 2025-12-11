@@ -348,7 +348,7 @@ class StripeService {
       console.log(`🚫 [CANCEL] User ${userId} requesting cancellation`);
       
       const subscription = await Subscription.findOne({
-        where: { user_id: userId, status: 'active' }
+        where: { user_id: userId, status: ['active', 'trialing', 'incomplete'] }
       });
 
       if (!subscription) {
@@ -403,12 +403,34 @@ class StripeService {
       }
 
       const subscription = await Subscription.findOne({
-        where: { user_id: userId, status: 'active' }
+        where: { user_id: userId, status: ['active', 'trialing', 'incomplete'] }
       });
 
       if (!subscription) {
         console.error(`❌ [CHANGE_PLAN] No active subscription found for user ${userId}`);
         throw new Error('No active subscription found');
+      }
+
+      const oldPlan = subscription.plan_type;
+
+      // Check if this is a downgrade and if it's allowed
+      const planOrder = { personal: 1, premium: 2, ultimate: 3 };
+      const isDowngrade = planOrder[newPlanType] < planOrder[oldPlan];
+
+      if (isDowngrade) {
+        console.log(`⚠️  [CHANGE_PLAN] Downgrade detected: ${oldPlan} -> ${newPlanType}`);
+        const featureLimitService = require('./FeatureLimitService');
+        const downgradeCheck = await featureLimitService.checkDowngradeAllowed(userId, oldPlan, newPlanType);
+        
+        if (!downgradeCheck.allowed) {
+          console.log(`❌ [CHANGE_PLAN] Downgrade blocked: ${downgradeCheck.message}`);
+          throw new Error(JSON.stringify({
+            error: 'Downgrade not allowed',
+            message: downgradeCheck.message,
+            warnings: downgradeCheck.warnings,
+            blockedFeatures: downgradeCheck.warnings
+          }));
+        }
       }
 
       console.log(`✅ [CHANGE_PLAN] Found subscription ${subscription.id}, current plan: ${subscription.plan_type}`);
@@ -438,9 +460,6 @@ class StripeService {
       );
 
       console.log(`✅ [CHANGE_PLAN] Stripe subscription updated - New plan: ${newPlanType}`);
-
-      // Get old plan before updating
-      const oldPlan = subscription.plan_type;
 
       // Update database
       await this.createOrUpdateSubscription(userId, updatedSubscription, newPlanType);
