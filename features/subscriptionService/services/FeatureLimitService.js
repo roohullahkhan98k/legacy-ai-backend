@@ -341,13 +341,21 @@ class FeatureLimitService {
       ];
 
       for (const defaultLimit of defaults) {
-        await FeatureLimit.findOrCreate({
+        const [limit, created] = await FeatureLimit.findOrCreate({
           where: {
             plan_type: defaultLimit.plan_type,
             feature_name: defaultLimit.feature_name
           },
           defaults: defaultLimit
         });
+        
+        // Update existing record if it was found (not created)
+        if (!created) {
+          await limit.update({
+            limit_value: defaultLimit.limit_value,
+            limit_type: defaultLimit.limit_type
+          });
+        }
       }
 
       console.log('✅ [FeatureLimit] Default limits initialized');
