@@ -125,25 +125,37 @@ exports.createMemory = async (req, res) => {
 		
 		if (isTranslationAvailable && detectedLanguage) {
           console.log(`[Translation] Starting translation for memory ${memoryId} from ${detectedLanguage} to:`, targetLanguages.join(', '));
+          const translationStartTime = Date.now();
+          
           translationService.translateToMultiple(document, detectedLanguage, targetLanguages)
             .then(translations => {
+              const translationTime = Date.now() - translationStartTime;
+              console.log(`[Translation] Translation completed in ${translationTime}ms for memory ${memoryId}`);
+              
               // Only update if we got actual translations (not empty object)
               if (translations && Object.keys(translations).length > 0) {
+                console.log(`[Translation] Got ${Object.keys(translations).length} translations:`, Object.keys(translations).join(', '));
                 MemoryNode.update(
                   { translated_texts: translations },
                   { where: { id: memoryId } }
                 ).then(() => {
-                  console.log(`✅ Translations saved for memory ${memoryId}:`, Object.keys(translations).join(', '));
-                }).catch(err => console.warn('Failed to save translations:', err.message));
+                  const totalTime = Date.now() - translationStartTime;
+                  console.log(`✅ [Translation] Translations saved for memory ${memoryId} (${Object.keys(translations).length} languages) in ${totalTime}ms:`, Object.keys(translations).join(', '));
+                }).catch(err => {
+                  console.error('❌ [Translation] Failed to save translations to database:', err.message);
+                });
               } else {
-                console.log(`⚠️ No translations generated for memory ${memoryId} (quota/error)`);
+                console.log(`⚠️ [Translation] No translations generated for memory ${memoryId} (quota/error or all translations failed)`);
               }
             })
             .catch(err => {
+              const translationTime = Date.now() - translationStartTime;
               // Silently handle - translation is optional, memory creation still succeeds
               // Error already logged in TranslationService
-              console.error(`❌ Translation generation failed for memory ${memoryId}:`, err.message);
-              console.error('Translation error stack:', err.stack);
+              console.error(`❌ [Translation] Translation generation failed for memory ${memoryId} after ${translationTime}ms:`, err.message);
+              if (err.stack) {
+                console.error('[Translation] Error stack:', err.stack);
+              }
             });
         } else {
           console.log(`⚠️ [Translation] Skipping translation - available: ${isTranslationAvailable}, language: ${detectedLanguage}`);

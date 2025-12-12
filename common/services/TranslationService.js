@@ -120,6 +120,10 @@ Translated text:`;
    */
   async translateToMultiple(text, sourceLang, targetLangs) {
     const translations = {};
+    const totalLanguages = targetLangs.filter(lang => lang !== sourceLang).length;
+    let completed = 0;
+    
+    console.log(`[TranslationService] Translating to ${totalLanguages} languages...`);
     
     // Translate to each target language
     for (const targetLang of targetLangs) {
@@ -129,19 +133,29 @@ Translated text:`;
       }
       
       try {
+        const langStartTime = Date.now();
         const translated = await this.translate(text, sourceLang, targetLang);
+        const langTime = Date.now() - langStartTime;
+        completed++;
+        
         // Only add if translation succeeded (not same as original due to error)
         // If translation failed, translate() returns original text, so this check prevents adding it
         if (translated && translated !== text && translated.trim().length > 0) {
           translations[targetLang] = translated;
+          console.log(`[TranslationService] ✅ ${targetLang} translated (${completed}/${totalLanguages}) in ${langTime}ms`);
+        } else {
+          console.log(`[TranslationService] ⚠️ ${targetLang} translation returned original text (${completed}/${totalLanguages})`);
         }
       } catch (error) {
+        completed++;
         // Log error but continue with other translations
-        console.warn(`⚠️ Failed to translate to ${targetLang}:`, error.message);
+        console.warn(`[TranslationService] ❌ Failed to translate to ${targetLang} (${completed}/${totalLanguages}):`, error.message);
         // Skip this translation if it fails
       }
     }
 
+    console.log(`[TranslationService] Translation complete: ${Object.keys(translations).length}/${totalLanguages} languages succeeded`);
+    
     // Only return translations if we actually have some (not empty object)
     return Object.keys(translations).length > 0 ? translations : {};
   }
