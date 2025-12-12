@@ -117,7 +117,7 @@ exports.createMemory = async (req, res) => {
 
 		// Milestone 6: Next 35% - Generate translations (async, don't block)
 		let translatedTexts = {};
-		const targetLanguages = ['en', 'ar', 'hi']; // Common languages to translate to
+		const targetLanguages = ['en', 'ar', 'de', 'es', 'fr', 'hi', 'it', 'ja', 'ko', 'pt', 'ru', 'zh']; // All supported languages
 		
 		// Generate translations in background (non-blocking)
 		if (translationService.isAvailable() && detectedLanguage) {
@@ -394,7 +394,7 @@ exports.addTags = async (req, res) => {
 			
 			// Milestone 6: Next 35% - Regenerate translations if document changed
 			if (translationService.isAvailable() && detectedLanguage) {
-				const targetLanguages = ['en', 'ar', 'hi'];
+				const targetLanguages = ['en', 'ar', 'de', 'es', 'fr', 'hi', 'it', 'ja', 'ko', 'pt', 'ru', 'zh'];
 				translationService.translateToMultiple(doc, detectedLanguage, targetLanguages)
 					.then(translations => {
 						// Only update if we got actual translations (not empty object)

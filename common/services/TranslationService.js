@@ -150,7 +150,7 @@ Translated text:`;
    * Check if translation service is available
    */
   isAvailable() {
-    return !!this.apiKey && !!this.genAI;
+    return !!this.apiKey && !!this.client;
   }
 }
 
