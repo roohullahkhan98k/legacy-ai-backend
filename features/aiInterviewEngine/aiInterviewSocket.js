@@ -1,6 +1,6 @@
 const WebSocket = require('ws');
 require('dotenv').config();
-const GeminiService = require('./services/GeminiService');
+const OpenAIService = require('./services/OpenAIService');
 
 class AIInterviewSocket {
   constructor() {
