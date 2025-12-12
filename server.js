@@ -29,6 +29,7 @@ const avatarRoutes = require('./features/avatarService/routes/avatarRoutes');
 const avatarPipelineRoutes = require('./features/avatarService/routes/pipelineRoutes');
 const multimediaRoutes = require('./features/multimediaUpload/routes');
 const subscriptionRoutes = require('./features/subscriptionService/routes/subscriptionRoutes');
+const adminRoutes = require('./features/adminService/routes/adminRoutes');
 
 
 const app = express();
@@ -93,6 +94,10 @@ app.use('/api/multimedia', multimediaRoutes);
 
 // Mount Subscription routes
 app.use('/api/subscription', subscriptionRoutes);
+
+// Mount Admin routes (requires admin role)
+app.use('/api/admin', adminRoutes);
+console.log('✅ Admin routes mounted at /api/admin');
 
 // Health check endpoint
 app.get('/health', async (req, res) => {
