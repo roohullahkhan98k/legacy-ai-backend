@@ -163,6 +163,13 @@ class StripeService {
       throw new Error('Missing userId or planType in session metadata');
     }
 
+    // Ensure user has stripe_customer_id set (in case it wasn't saved during checkout)
+    const user = await User.findByPk(userId);
+    if (user && session.customer && !user.stripe_customer_id) {
+      console.log(`💾 [CHECKOUT] Updating user ${userId} with stripe_customer_id: ${session.customer}`);
+      await user.update({ stripe_customer_id: session.customer });
+    }
+
     // Get subscription from Stripe
     console.log(`🔄 [CHECKOUT] Retrieving subscription from Stripe: ${session.subscription}`);
     const subscription = await stripe.subscriptions.retrieve(session.subscription);
@@ -172,6 +179,11 @@ class StripeService {
     console.log(`💾 [CHECKOUT] Creating/updating subscription in database`);
     await this.createOrUpdateSubscription(userId, subscription, planType);
     console.log(`✅ [CHECKOUT] Subscription saved to database`);
+    
+    // If status is incomplete, log a warning (it should update to active when payment succeeds)
+    if (subscription.status === 'incomplete' || subscription.status === 'incomplete_expired') {
+      console.log(`⚠️  [CHECKOUT] Subscription status is "${subscription.status}". It should update to "active" when payment succeeds via invoice.payment_succeeded webhook.`);
+    }
   }
 
   /**
@@ -193,13 +205,31 @@ class StripeService {
         where: { stripe_customer_id: stripeSubscription.customer }
       });
       if (!user) {
-        console.error(`❌ [SUBSCRIPTION] User not found for customer: ${stripeSubscription.customer}`);
-        throw new Error('User not found for subscription');
+        console.log(`🔍 [SUBSCRIPTION] User not found by stripe_customer_id, trying by email: ${customer.email}`);
+        // Try to find user by email as fallback (for admin-created users)
+        const userByEmail = await User.findOne({
+          where: { email: customer.email }
+        });
+        if (userByEmail) {
+          console.log(`✅ [SUBSCRIPTION] User found by email, updating stripe_customer_id`);
+          await userByEmail.update({ stripe_customer_id: stripeSubscription.customer });
+          userId = userByEmail.id;
+        } else {
+          console.error(`❌ [SUBSCRIPTION] User not found for customer: ${stripeSubscription.customer}`);
+          throw new Error('User not found for subscription');
+        }
+      } else {
+        userId = user.id;
+        console.log(`✅ [SUBSCRIPTION] User found: ${userId}`);
       }
-      userId = user.id;
-      console.log(`✅ [SUBSCRIPTION] User found: ${userId}`);
     } else {
       console.log(`✅ [SUBSCRIPTION] UserId from metadata: ${userId}`);
+      // Ensure user has stripe_customer_id set (for admin-created users)
+      const user = await User.findByPk(userId);
+      if (user && !user.stripe_customer_id) {
+        console.log(`💾 [SUBSCRIPTION] Updating user ${userId} with stripe_customer_id: ${stripeSubscription.customer}`);
+        await user.update({ stripe_customer_id: stripeSubscription.customer });
+      }
     }
 
     // Determine plan type from price ID

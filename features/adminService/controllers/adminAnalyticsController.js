@@ -373,7 +373,7 @@ class AdminAnalyticsController {
       const dateRange = this.getDateRange(period);
 
       // Get most active users
-      const [topUsersByInterviews, topUsersByMemories, topUsersByVoices, topUsersByAvatars] = await Promise.all([
+      const [topUsersByInterviews, topUsersByMemories, topUsersByVoices, topUsersByAvatars, topUsersByMultimedia] = await Promise.all([
         Interview.findAll({
           attributes: [
             'user_id',
@@ -427,6 +427,19 @@ class AdminAnalyticsController {
           order: [[sequelize.fn('COUNT', sequelize.col('id')), 'DESC']],
           limit: 10,
           raw: true
+        }),
+        MultimediaFile.findAll({
+          attributes: [
+            'user_id',
+            [sequelize.fn('COUNT', sequelize.col('id')), 'count']
+          ],
+          where: {
+            created_at: { [Op.gte]: dateRange.start }
+          },
+          group: ['user_id'],
+          order: [[sequelize.fn('COUNT', sequelize.col('id')), 'DESC']],
+          limit: 10,
+          raw: true
         })
       ]);
 
@@ -435,7 +448,8 @@ class AdminAnalyticsController {
         ...topUsersByInterviews.map(r => r.user_id),
         ...topUsersByMemories.map(r => r.user_id),
         ...topUsersByVoices.map(r => r.user_id),
-        ...topUsersByAvatars.map(r => r.user_id)
+        ...topUsersByAvatars.map(r => r.user_id),
+        ...topUsersByMultimedia.map(r => r.user_id)
       ];
       const uniqueUserIds = [...new Set(allUserIds.filter(id => id))];
       const users = await User.findAll({
@@ -465,11 +479,12 @@ class AdminAnalyticsController {
       res.json({
         success: true,
         data: {
-          topUsersByInterviews: formatTopUsers(topUsersByInterviews, 'interviews'),
-          topUsersByMemories: formatTopUsers(topUsersByMemories, 'memories'),
-          topUsersByVoices: formatTopUsers(topUsersByVoices, 'voices'),
-          topUsersByAvatars: formatTopUsers(topUsersByAvatars, 'avatars'),
-          period: period
+        topUsersByInterviews: formatTopUsers(topUsersByInterviews, 'interviews'),
+        topUsersByMemories: formatTopUsers(topUsersByMemories, 'memories'),
+        topUsersByVoices: formatTopUsers(topUsersByVoices, 'voices'),
+        topUsersByAvatars: formatTopUsers(topUsersByAvatars, 'avatars'),
+        topUsersByMultimedia: formatTopUsers(topUsersByMultimedia, 'multimedia'),
+        period: period
         }
       });
     } catch (error) {

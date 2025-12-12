@@ -307,7 +307,7 @@ const voiceUsageTrend = data.data.usageOverTime.voice_clones;
 
 **Endpoint:** `GET /api/admin/analytics/users-activity`
 
-**Description:** Get most active users - see top users by interviews, memories, voices, and avatars.
+**Description:** Get most active users - see top users by interviews, memories, voices, avatars, and multimedia uploads.
 
 **Query Parameters:**
 - `period` (optional): `7d` | `30d` | `90d` | `1y` | `all` (default: `30d`)
@@ -345,6 +345,19 @@ const voiceUsageTrend = data.data.usageOverTime.voice_clones;
     ],
     "topUsersByVoices": [...],
     "topUsersByAvatars": [...],
+    "topUsersByMultimedia": [
+      {
+        "userId": "user-uuid-789",
+        "user": {
+          "id": "user-uuid-789",
+          "email": "mediauser@example.com",
+          "username": "mediauser",
+          "name": "Media User"
+        },
+        "count": 150,
+        "type": "multimedia"
+      }
+    ],
     "period": "30d"
   }
 }
@@ -363,6 +376,8 @@ const topInterviewUsers = data.data.topUsersByInterviews;
 // Top 10 users by interview count
 const topMemoryUsers = data.data.topUsersByMemories;
 // Top 10 users by memory count
+const topMultimediaUsers = data.data.topUsersByMultimedia;
+// Top 10 users by multimedia upload count
 ```
 
 ---
