@@ -128,6 +128,7 @@ class AdminSubscriptionController {
   /**
    * PUT /api/admin/subscriptions/:id
    * Update subscription (status, plan type, etc.)
+   * Validates downgrades to prevent exceeding limits
    */
   async updateSubscription(req, res) {
     try {
@@ -159,6 +160,42 @@ class AdminSubscriptionController {
         });
       }
 
+      // If plan_type is being changed, check for downgrade validation
+      if (plan_type && plan_type !== subscription.plan_type) {
+        const planOrder = { personal: 1, premium: 2, ultimate: 3 };
+        const oldPlan = subscription.plan_type;
+        const newPlan = plan_type;
+        const isDowngrade = planOrder[newPlan] < planOrder[oldPlan];
+
+        // If it's a downgrade, check if user can downgrade
+        if (isDowngrade) {
+          const featureLimitService = require('../../subscriptionService/services/FeatureLimitService');
+          const downgradeCheck = await featureLimitService.checkDowngradeAllowed(
+            subscription.user_id,
+            oldPlan,
+            newPlan
+          );
+
+          // If downgrade is not allowed, return error with cleanup requirements
+          if (!downgradeCheck.allowed) {
+            return res.status(403).json({
+              success: false,
+              error: 'Downgrade not allowed',
+              message: downgradeCheck.message,
+              blockedFeatures: downgradeCheck.warnings,
+              needsCleanup: true,
+              cleanupRequired: downgradeCheck.warnings.map(w => ({
+                feature: w.feature,
+                currentUsage: w.currentUsage,
+                newLimit: w.newLimit,
+                overage: w.overage,
+                message: w.message
+              }))
+            });
+          }
+        }
+      }
+
       // Update fields
       const updateData = {};
       if (status !== undefined) updateData.status = status;
@@ -167,7 +204,20 @@ class AdminSubscriptionController {
       if (current_period_end !== undefined) updateData.current_period_end = current_period_end;
       if (cancel_at_period_end !== undefined) updateData.cancel_at_period_end = cancel_at_period_end;
 
+      // Track old plan for plan change handling
+      const oldPlan = subscription.plan_type;
       await subscription.update(updateData);
+
+      // If plan changed, handle plan change in FeatureLimitService
+      if (plan_type && plan_type !== oldPlan) {
+        try {
+          const featureLimitService = require('../../subscriptionService/services/FeatureLimitService');
+          await featureLimitService.handlePlanChange(subscription.user_id, oldPlan, plan_type);
+        } catch (error) {
+          console.warn('[Admin] Error handling plan change (non-critical):', error.message);
+          // Don't fail the update if plan change handling fails
+        }
+      }
 
       console.log(`[Admin] Subscription updated by ${req.user.id}:`, id);
 
@@ -213,6 +263,47 @@ class AdminSubscriptionController {
       });
     } catch (error) {
       console.error('[Admin] Error deleting subscription:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+  }
+
+  /**
+   * GET /api/admin/subscriptions/:id/check-downgrade?planType=personal
+   * Check if subscription can be downgraded to a plan (preview cleanup requirements)
+   */
+  async checkDowngrade(req, res) {
+    try {
+      const { id } = req.params;
+      const { planType } = req.query;
+
+      if (!planType || !['personal', 'premium', 'ultimate'].includes(planType)) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid planType. Must be: personal, premium, or ultimate'
+        });
+      }
+
+      const subscription = await Subscription.findByPk(id);
+
+      if (!subscription) {
+        return res.status(404).json({
+          success: false,
+          error: 'Subscription not found'
+        });
+      }
+
+      const featureLimitService = require('../../subscriptionService/services/FeatureLimitService');
+      const preview = await featureLimitService.getDowngradePreview(subscription.user_id, planType);
+
+      res.json({
+        success: true,
+        ...preview
+      });
+    } catch (error) {
+      console.error('[Admin] Error checking downgrade:', error);
       res.status(500).json({
         success: false,
         error: error.message

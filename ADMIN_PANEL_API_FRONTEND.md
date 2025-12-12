@@ -578,11 +578,90 @@ const pagination = data.pagination;
 
 ---
 
-### 3. Update Subscription
+### 3. Check Downgrade (Preview)
+
+**Endpoint:** `GET /api/admin/subscriptions/:id/check-downgrade?planType=personal`
+
+**Description:** Check if a subscription can be downgraded to a plan. Shows what needs cleanup before downgrade. Use this BEFORE attempting to downgrade to show admin what the user needs to clean up.
+
+**Query Parameters:**
+- `planType` (required): `personal` | `premium` | `ultimate`
+
+**Response Example:**
+```json
+{
+  "success": true,
+  "isDowngrade": true,
+  "currentPlan": "premium",
+  "targetPlan": "personal",
+  "canDowngrade": false,
+  "needsCleanup": true,
+  "cleanupRequired": true,
+  "message": "⚠️ Cleanup Required: You have 2 feature(s) that exceed the personal plan limits. Please delete 60 item(s) before downgrading.",
+  "warnings": [
+    {
+      "feature": "voice_clones",
+      "currentUsage": 50,
+      "newLimit": 10,
+      "overage": 40,
+      "message": "You have 50 voice clones, but personal plan only allows 10. Please delete 40 item(s) before downgrading."
+    }
+  ],
+  "featuresExceedingLimit": [
+    {
+      "feature": "voice_clones",
+      "currentUsage": 50,
+      "currentLimit": -1,
+      "newLimit": 10,
+      "overage": 40,
+      "needsCleanup": true
+    }
+  ],
+  "featuresWithinLimit": [
+    {
+      "feature": "interview_sessions",
+      "currentUsage": 5,
+      "currentLimit": -1,
+      "newLimit": 10,
+      "overage": 0,
+      "needsCleanup": false
+    }
+  ],
+  "totalOverage": 60
+}
+```
+
+**Frontend Usage:**
+```javascript
+// Check if downgrade is allowed before attempting
+const response = await fetch(
+  `/api/admin/subscriptions/${subscriptionId}/check-downgrade?planType=personal`,
+  {
+    headers: { 'Authorization': `Bearer ${token}` }
+  }
+);
+const preview = await response.json();
+
+if (preview.canDowngrade) {
+  // Show confirmation dialog
+  // Proceed with downgrade
+} else {
+  // Show cleanup requirements
+  // Display what needs to be deleted
+  console.log(preview.featuresExceedingLimit);
+  console.log(preview.message);
+}
+```
+
+---
+
+### 4. Update Subscription
 
 **Endpoint:** `PUT /api/admin/subscriptions/:id`
 
 **Description:** Update subscription status, plan type, or billing periods.
+
+**Important:** When changing `plan_type` to a lower plan (downgrade), the backend automatically validates if the user can downgrade. If the user exceeds the new plan's limits, the update will be blocked and you'll receive cleanup requirements.
 
 **Request Body:**
 ```json
@@ -597,7 +676,7 @@ const pagination = data.pagination;
 
 **Note:** All fields are optional. Only include fields you want to update.
 
-**Response Example:**
+**Success Response:**
 ```json
 {
   "success": true,
@@ -610,9 +689,42 @@ const pagination = data.pagination;
 }
 ```
 
+**Error Response (Downgrade Blocked - User Exceeds Limits):**
+```json
+{
+  "success": false,
+  "error": "Downgrade not allowed",
+  "message": "Cannot downgrade: You have 2 feature(s) that exceed the personal plan limits. Please delete items to continue.",
+  "needsCleanup": true,
+  "cleanupRequired": [
+    {
+      "feature": "voice_clones",
+      "currentUsage": 50,
+      "newLimit": 10,
+      "overage": 40,
+      "message": "You have 50 voice clones, but personal plan only allows 10. Please delete 40 item(s) before downgrading."
+    },
+    {
+      "feature": "avatar_generations",
+      "currentUsage": 25,
+      "newLimit": 5,
+      "overage": 20,
+      "message": "You have 25 avatar generations, but personal plan only allows 5. Please delete 20 item(s) before downgrading."
+    }
+  ]
+}
+```
+
+**HTTP Status Codes:**
+- `200` - Success (update completed)
+- `400` - Bad Request (invalid status/plan type)
+- `403` - Forbidden (downgrade blocked - user exceeds new plan limits)
+- `404` - Not Found (subscription not found)
+- `500` - Server Error
+
 **Frontend Usage:**
 ```javascript
-// Update subscription
+// Update subscription (with downgrade validation)
 const response = await fetch(`/api/admin/subscriptions/${subscriptionId}`, {
   method: 'PUT',
   headers: {
@@ -620,16 +732,28 @@ const response = await fetch(`/api/admin/subscriptions/${subscriptionId}`, {
     'Content-Type': 'application/json'
   },
   body: JSON.stringify({
-    status: 'canceled',
-    cancel_at_period_end: true
+    plan_type: 'personal' // Trying to downgrade
   })
 });
 const data = await response.json();
+
+// Check if downgrade was blocked
+if (!data.success && data.needsCleanup) {
+  // Show cleanup requirements to admin
+  console.error(data.message);
+  data.cleanupRequired.forEach(item => {
+    console.log(`${item.feature}: Delete ${item.overage} items`);
+  });
+  // Display error message and cleanup list to admin
+} else if (data.success) {
+  // Update successful
+  console.log('Subscription updated');
+}
 ```
 
 ---
 
-### 4. Delete Subscription
+### 5. Delete Subscription
 
 **Endpoint:** `DELETE /api/admin/subscriptions/:id`
 
@@ -871,9 +995,10 @@ All endpoints return errors in this format:
 ### Subscription Management:
 1. `GET /api/admin/subscriptions` - List all subscriptions (with filters)
 2. `GET /api/admin/subscriptions/:id` - Get subscription by ID
-3. `PUT /api/admin/subscriptions/:id` - Update subscription
-4. `DELETE /api/admin/subscriptions/:id` - Delete subscription
-5. `GET /api/admin/users/:id` - Get user details (includes subscription info - **EXISTING**)
+3. `GET /api/admin/subscriptions/:id/check-downgrade` - Check if downgrade is allowed (preview cleanup requirements)
+4. `PUT /api/admin/subscriptions/:id` - Update subscription (validates downgrades automatically)
+5. `DELETE /api/admin/subscriptions/:id` - Delete subscription
+6. `GET /api/admin/users/:id` - Get user details (includes subscription info - **EXISTING**)
 
 ### Existing Subscription Admin APIs (Old):
 - `GET /api/subscription/admin/limits` - Get feature limits (**EXISTING**)

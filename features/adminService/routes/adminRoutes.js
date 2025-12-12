@@ -20,6 +20,7 @@ router.delete('/users/:id', adminUserController.deleteUser.bind(adminUserControl
 // Subscription Management routes
 router.get('/subscriptions', adminSubscriptionController.getAllSubscriptions.bind(adminSubscriptionController));
 router.get('/subscriptions/:id', adminSubscriptionController.getSubscriptionById.bind(adminSubscriptionController));
+router.get('/subscriptions/:id/check-downgrade', adminSubscriptionController.checkDowngrade.bind(adminSubscriptionController));
 router.put('/subscriptions/:id', adminSubscriptionController.updateSubscription.bind(adminSubscriptionController));
 router.delete('/subscriptions/:id', adminSubscriptionController.deleteSubscription.bind(adminSubscriptionController));
 // Note: To get user's subscription, use GET /api/admin/users/:id which already includes subscription info
