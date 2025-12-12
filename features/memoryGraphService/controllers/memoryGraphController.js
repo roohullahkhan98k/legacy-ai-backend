@@ -120,7 +120,11 @@ exports.createMemory = async (req, res) => {
 		const targetLanguages = ['en', 'ar', 'de', 'es', 'fr', 'hi', 'it', 'ja', 'ko', 'pt', 'ru', 'zh']; // All supported languages
 		
 		// Generate translations in background (non-blocking)
-		if (translationService.isAvailable() && detectedLanguage) {
+		const isTranslationAvailable = translationService.isAvailable();
+		console.log(`[Translation] Service available: ${isTranslationAvailable}, detectedLanguage: ${detectedLanguage}`);
+		
+		if (isTranslationAvailable && detectedLanguage) {
+          console.log(`[Translation] Starting translation for memory ${memoryId} from ${detectedLanguage} to:`, targetLanguages.join(', '));
           translationService.translateToMultiple(document, detectedLanguage, targetLanguages)
             .then(translations => {
               // Only update if we got actual translations (not empty object)
@@ -138,8 +142,11 @@ exports.createMemory = async (req, res) => {
             .catch(err => {
               // Silently handle - translation is optional, memory creation still succeeds
               // Error already logged in TranslationService
-              console.log(`⚠️ Translation generation failed for memory ${memoryId}:`, err.message);
+              console.error(`❌ Translation generation failed for memory ${memoryId}:`, err.message);
+              console.error('Translation error stack:', err.stack);
             });
+        } else {
+          console.log(`⚠️ [Translation] Skipping translation - available: ${isTranslationAvailable}, language: ${detectedLanguage}`);
         }
 
 		// Save to PostgreSQL
