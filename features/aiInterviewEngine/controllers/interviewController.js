@@ -48,14 +48,18 @@ class InterviewController {
 
       const result = await interviewService.startInterview(session_id, userId);
       
-      // Record usage after successful start
-      if (userId && result.success) {
+      // Record usage ONLY if this is a NEW interview (not existing one)
+      // This prevents double-counting when frontend retries or reconnects
+      if (userId && result.success && result.isNew) {
         const featureLimitService = require('../../subscriptionService/services/FeatureLimitService');
         await featureLimitService.recordUsage(userId, 'interview_sessions', {
           session_id: session_id,
           interview_id: result.interview_id,
           started_at: new Date()
         });
+        console.log('[Interview] Usage recorded for new interview:', result.interview_id);
+      } else if (userId && result.success && !result.isNew) {
+        console.log('[Interview] Skipping usage recording - interview already existed:', result.interview_id);
       }
       
       console.log('[Interview] Start success:', result);

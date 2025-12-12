@@ -11,7 +11,7 @@ class InterviewService {
       const existing = await Interview.findOne({ where: { session_id: sessionId } });
       if (existing) {
         console.log('✅ Interview already exists, returning existing:', existing.id);
-        return { success: true, interview_id: existing.id };
+        return { success: true, interview_id: existing.id, isNew: false };
       }
 
       const interview = await Interview.create({
@@ -23,7 +23,8 @@ class InterviewService {
         started_at: new Date()
       });
 
-      return { success: true, interview_id: interview.id };
+      console.log('✅ New interview created:', interview.id);
+      return { success: true, interview_id: interview.id, isNew: true };
     } catch (error) {
       throw new Error(`Failed to start interview: ${error.message}`);
     }
