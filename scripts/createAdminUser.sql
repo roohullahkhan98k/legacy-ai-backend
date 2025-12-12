@@ -9,7 +9,7 @@
 UPDATE users 
 SET 
   role = 'admin',
-  "isActive" = true,
+  "isActive" = true,`
   "isVerified" = true,
   "updatedAt" = NOW()
 WHERE email = 'admin@legacyai.com';

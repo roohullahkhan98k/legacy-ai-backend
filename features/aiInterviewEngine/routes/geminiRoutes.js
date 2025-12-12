@@ -29,8 +29,8 @@ router.get('/models', async (req, res) => {
     res.json({
       success: true,
       message: 'Check console for available models',
-      note: 'If you see a 404 error, your API key may not have access to Gemini models',
-      apiKeyPresent: !!process.env.GEMINI_API_KEY
+      note: 'If you see a 404 error, your API key may not have access to OpenAI models',
+      apiKeyPresent: !!process.env.OPENAI_API_KEY
     });
   } catch (error) {
     res.status(500).json({
@@ -47,20 +47,20 @@ router.post('/test', async (req, res) => {
     
     const { question = 'What is 2+2?' } = req.body;
     
-    const GeminiService = require('../services/GeminiService');
-    const geminiService = new GeminiService();
+    const OpenAIService = require('../services/OpenAIService');
+    const openAIService = new OpenAIService();
     
-    console.log('📝 Sending question to Gemini:', question);
+    console.log('📝 Sending question to OpenAI:', question);
     
     // Use the correct format - create a proper prompt
     const prompt = `Answer this question: "${question}"`;
-    const response = await geminiService.makeRequest(prompt);
+    const response = await openAIService.makeRequest(prompt);
     
-    console.log('✅ Gemini response received:', response);
+    console.log('✅ OpenAI response received:', response);
     
     res.json({
       success: true,
-      message: 'Gemini API test successful',
+      message: 'OpenAI API test successful',
       question: question,
       response: response,
       timestamp: new Date().toISOString()
@@ -71,7 +71,7 @@ router.post('/test', async (req, res) => {
     
     res.status(500).json({
       success: false,
-      message: 'Gemini API test failed',
+      message: 'OpenAI API test failed',
       error: error.message,
       timestamp: new Date().toISOString()
     });

@@ -1,19 +1,21 @@
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+const OpenAI = require('openai');
 
 /**
  * Translation Service - Milestone 6 (Next 35% Implementation)
- * Translates text between languages using Gemini API
+ * Translates text between languages using OpenAI API
  */
 class TranslationService {
   constructor() {
-    this.apiKey = process.env.GEMINI_API_KEY;
+    this.apiKey = process.env.OPENAI_API_KEY;
+    this.model = process.env.OPENAI_MODEL || 'gpt-4o-mini';
     this.quotaErrorLogged = false; // Track if quota error was already logged
     
     if (!this.apiKey) {
-      console.warn('⚠️ GEMINI_API_KEY not found in environment variables');
+      console.warn('⚠️ OPENAI_API_KEY not found in environment variables');
     } else {
-      this.genAI = new GoogleGenerativeAI(this.apiKey);
-      this.model = this.genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+      this.client = new OpenAI({
+        apiKey: this.apiKey
+      });
     }
   }
 
@@ -25,8 +27,8 @@ class TranslationService {
    * @returns {Promise<string>} - Translated text
    */
   async translate(text, sourceLang, targetLang) {
-    if (!this.apiKey || !this.genAI) {
-      throw new Error('Gemini API key not configured');
+    if (!this.apiKey || !this.client) {
+      throw new Error('OpenAI API key not configured');
     }
 
     if (!text || typeof text !== 'string' || text.trim().length === 0) {
@@ -65,19 +67,29 @@ ${text}
 Translated text:`;
 
     try {
-      const result = await this.model.generateContent(prompt);
-      const response = await result.response;
-      const translated = response.text().trim();
+      const response = await this.client.chat.completions.create({
+        model: this.model,
+        messages: [
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
+        temperature: 0.3,
+        max_tokens: 1000
+      });
+      
+      const translated = response.choices[0].message.content.trim();
       
       // Clean up response (remove quotes if present)
       return translated.replace(/^["']|["']$/g, '');
     } catch (error) {
-      // Match GeminiService error handling pattern exactly
+      // Match OpenAI error handling pattern
       console.error('❌ Translation API Error:', error.message);
       
-      if (error.message?.includes('API_KEY_INVALID')) {
+      if (error.status === 401) {
         throw new Error('Invalid API key or access denied.');
-      } else if (error.message?.includes('RATE_LIMIT') || error.message?.includes('429')) {
+      } else if (error.status === 429) {
         // Rate limit - return original text (graceful degradation for translations)
         if (!this.quotaErrorLogged) {
           console.warn('⚠️ TranslationService: Rate limit exceeded. Returning original text.');

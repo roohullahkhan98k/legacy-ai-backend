@@ -1,15 +1,15 @@
 class GeminiController {
   constructor() {
-    this.geminiService = null;
+    this.openAIService = null;
   }
 
-  // Lazy load the GeminiService
-  getGeminiService() {
-    if (!this.geminiService) {
-      const GeminiService = require('../services/GeminiService');
-      this.geminiService = new GeminiService();
+  // Lazy load the OpenAIService
+  getOpenAIService() {
+    if (!this.openAIService) {
+      const OpenAIService = require('../services/OpenAIService');
+      this.openAIService = new OpenAIService();
     }
-    return this.geminiService;
+    return this.openAIService;
   }
 
   // Generate questions from transcript
@@ -35,7 +35,7 @@ class GeminiController {
       }
 
       console.log('🧠 Generating questions from transcript...');
-      const questions = await this.getGeminiService().generateQuestions(transcript, maxQuestions, categories);
+      const questions = await this.getOpenAIService().generateQuestions(transcript, maxQuestions, categories);
       
       const processingTime = Date.now() - startTime;
       
@@ -45,7 +45,7 @@ class GeminiController {
         metadata: {
           totalQuestions: questions.length,
           processingTime,
-          model: 'gemini-pro',
+          model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
           transcriptLength: transcript.length
         }
       });
@@ -56,7 +56,7 @@ class GeminiController {
         error: error.message || 'Failed to generate questions',
         metadata: {
           processingTime: Date.now() - startTime,
-          model: 'gemini-pro'
+          model: process.env.OPENAI_MODEL || 'gpt-4o-mini'
         }
       });
     }
@@ -86,7 +86,7 @@ class GeminiController {
       }
 
       console.log('🤖 Generating answer for question...');
-      const answer = await this.getGeminiService().getAnswer(question, context, style);
+      const answer = await this.getOpenAIService().getAnswer(question, context, style);
       
       const processingTime = Date.now() - startTime;
       
@@ -95,7 +95,7 @@ class GeminiController {
         ...answer,
         metadata: {
           processingTime,
-          model: 'gemini-pro',
+          model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
           style,
           questionLength: question.length,
           contextLength: context ? context.length : 0
@@ -108,7 +108,7 @@ class GeminiController {
         error: error.message || 'Failed to get answer',
         metadata: {
           processingTime: Date.now() - startTime,
-          model: 'gemini-pro'
+          model: process.env.OPENAI_MODEL || 'gpt-4o-mini'
         }
       });
     }
@@ -138,7 +138,7 @@ class GeminiController {
       }
 
       console.log('📊 Analyzing transcript...');
-      const analysis = await this.getGeminiService().analyzeTranscript(transcript, analysisType);
+      const analysis = await this.getOpenAIService().analyzeTranscript(transcript, analysisType);
       
       const processingTime = Date.now() - startTime;
       
@@ -147,7 +147,7 @@ class GeminiController {
         ...analysis,
         metadata: {
           processingTime,
-          model: 'gemini-pro',
+          model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
           analysisType,
           transcriptLength: transcript.length
         }
@@ -159,22 +159,22 @@ class GeminiController {
         error: error.message || 'Failed to analyze transcript',
         metadata: {
           processingTime: Date.now() - startTime,
-          model: 'gemini-pro'
+          model: process.env.OPENAI_MODEL || 'gpt-4o-mini'
         }
       });
     }
   }
 
-  // Health check for Gemini API
+  // Health check for OpenAI API
   async healthCheck(req, res) {
     try {
       const testPrompt = 'Hello, this is a health check. Please respond with "OK" if you can read this.';
-      const response = await this.getGeminiService().makeRequest(testPrompt, { maxTokens: 10 });
+      const response = await this.getOpenAIService().makeRequest(testPrompt, { maxTokens: 10 });
       
       res.json({
         success: true,
         status: 'healthy',
-        message: 'Gemini API is working correctly',
+        message: 'OpenAI API is working correctly',
         response: response.trim()
       });
     } catch (error) {
@@ -182,21 +182,21 @@ class GeminiController {
         success: false,
         status: 'unhealthy',
         error: error.message,
-        message: 'Gemini API is not responding correctly'
+        message: 'OpenAI API is not responding correctly'
       });
     }
   }
 
   // Get API configuration info
   async getConfig(req, res) {
-    const hasApiKey = !!process.env.GEMINI_API_KEY;
+    const hasApiKey = !!process.env.OPENAI_API_KEY;
     
     res.json({
       success: true,
       config: {
         hasApiKey,
-        model: 'gemini-1.5-flash',
-        sdk: '@google/generative-ai',
+        model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+        sdk: 'openai',
         features: [
           'question-generation',
           'answer-generation', 

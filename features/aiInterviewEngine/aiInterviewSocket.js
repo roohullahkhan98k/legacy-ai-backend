@@ -9,7 +9,7 @@ class AIInterviewSocket {
     this.LANGUAGE = 'en';
     this.clientServer = null;
     this.activeInterviews = new Map();
-    this.geminiService = new GeminiService();
+    this.openAIService = new OpenAIService();
     this.transcriptBuffer = new Map(); // Store transcripts per client
   }
 
@@ -331,7 +331,7 @@ class AIInterviewSocket {
     try {
       console.log('🧠 Generating real-time question from text:', text);
       
-      const question = await this.geminiService.generateSingleQuestion(text);
+      const question = await this.openAIService.generateSingleQuestion(text);
       
       const buffer = this.transcriptBuffer.get(clientId);
       if (buffer) {
@@ -364,7 +364,7 @@ class AIInterviewSocket {
       console.log('📝 Transcript length:', transcript.length);
       console.log('📝 Transcript preview:', transcript.substring(0, 200) + '...');
       
-      const questions = await this.geminiService.generateQuestions(transcript, 5);
+      const questions = await this.openAIService.generateQuestions(transcript, 5);
       
       const buffer = this.transcriptBuffer.get(clientId);
       if (buffer) {
@@ -404,8 +404,8 @@ class AIInterviewSocket {
         throw new Error('No transcript available');
       }
 
-      console.log('📝 Sending transcript to Gemini for streaming response:', buffer.fullTranscript);
-      console.log('🔍 Gemini service available:', !!this.geminiService);
+      console.log('📝 Sending transcript to OpenAI for streaming response:', buffer.fullTranscript);
+      console.log('🔍 OpenAI service available:', !!this.openAIService);
 
       const stylePrompts = {
         professional: 'Provide a professional, well-structured response suitable for a job interview.',
@@ -424,7 +424,7 @@ class AIInterviewSocket {
       Provide a natural, conversational response that addresses the content of the transcript.
       `;
 
-      await this.geminiService.streamResponseToClient(clientSocket, prompt, { 
+      await this.openAIService.streamResponseToClient(clientSocket, prompt, { 
         temperature: 0.5, 
         maxTokens: 1500 
       });
@@ -460,7 +460,7 @@ class AIInterviewSocket {
         throw new Error('Question not found');
       }
 
-      const answer = await this.geminiService.getAnswer(question.text, buffer.fullTranscript, style);
+      const answer = await this.openAIService.getAnswer(question.text, buffer.fullTranscript, style);
       
       clientSocket.send(JSON.stringify({
         type: 'answer_received',
