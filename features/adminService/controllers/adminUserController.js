@@ -48,9 +48,40 @@ class AdminUserController {
         attributes: { exclude: ['password'] } // Never return passwords
       });
 
+      // Get subscriptions for all users in this page
+      const userIds = users.map(u => u.id);
+      const subscriptions = await Subscription.findAll({
+        where: { user_id: { [Op.in]: userIds } },
+        order: [['created_at', 'DESC']]
+      });
+
+      // Create subscription map (user_id -> subscription)
+      const subscriptionMap = new Map();
+      subscriptions.forEach(sub => {
+        if (!subscriptionMap.has(sub.user_id)) {
+          subscriptionMap.set(sub.user_id, sub);
+        }
+      });
+
+      // Add subscription info to each user
+      const usersWithSubscriptions = users.map(user => {
+        const userData = user.toJSON();
+        const subscription = subscriptionMap.get(user.id);
+        userData.subscription = subscription ? {
+          plan: subscription.plan_type,
+          status: subscription.status,
+          hasSubscription: true
+        } : {
+          hasSubscription: false,
+          plan: null,
+          status: null
+        };
+        return userData;
+      });
+
       res.json({
         success: true,
-        users,
+        users: usersWithSubscriptions,
         pagination: {
           total: count,
           page: parseInt(page),
