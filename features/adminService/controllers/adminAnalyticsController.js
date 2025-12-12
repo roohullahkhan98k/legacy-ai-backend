@@ -309,14 +309,14 @@ class AdminAnalyticsController {
       const featureStats = {};
       Object.keys(byFeature).forEach(featureName => {
         const records = byFeature[featureName];
-        const totalUsage = records.reduce((sum, r) => sum + r.usage_count, 0);
+        const totalUsage = records.reduce((sum, r) => sum + (r.usageCount || 0), 0);
         const topUsers = records
-          .sort((a, b) => b.usage_count - a.usage_count)
+          .sort((a, b) => (b.usageCount || 0) - (a.usageCount || 0))
           .slice(0, 10);
 
         featureStats[featureName] = {
           totalUsage,
-          uniqueUsers: new Set(records.map(r => r.user_id)).size,
+          uniqueUsers: new Set(records.map(r => r.userId)).size,
           averageUsage: records.length > 0 ? totalUsage / records.length : 0,
           topUsers
         };
