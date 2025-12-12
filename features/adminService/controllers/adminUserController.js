@@ -2,7 +2,7 @@ const User = require('../../../common/models/User');
 const Interview = require('../../aiInterviewEngine/models/Interview');
 const MemoryNode = require('../../memoryGraphService/models/MemoryNode');
 const { UserVoice, GeneratedAudio } = require('../../voiceCloningPlayback/models/VoiceCloning');
-const Avatar = require('../../avatarService/models/Avatar');
+const { UserAvatar } = require('../../avatarService/models/Avatar');
 const Subscription = require('../../subscriptionService/models/Subscription');
 const UserFeatureUsage = require('../../subscriptionService/models/UserFeatureUsage');
 const { MultimediaFile, MultimediaMemoryNode, MultimediaLink } = require('../../multimediaUpload/models/Multimedia');
@@ -122,7 +122,7 @@ class AdminUserController {
         Interview.count({ where: { user_id: id } }),
         MemoryNode.count({ where: { user_id: id } }),
         UserVoice.count({ where: { user_id: id } }),
-        Avatar.count({ where: { user_id: id } }),
+        UserAvatar.count({ where: { user_id: id } }),
         Subscription.findOne({ where: { user_id: id }, order: [['created_at', 'DESC']] })
       ]);
 
@@ -374,7 +374,7 @@ class AdminUserController {
       deleteResults.generatedAudio = generatedAudioCount;
 
       // 4. Delete avatars
-      const avatars = await Avatar.findAll({ where: { user_id: id } });
+      const avatars = await UserAvatar.findAll({ where: { user_id: id } });
       for (const avatar of avatars) {
         // Delete avatar files if they exist
         try {
@@ -390,7 +390,7 @@ class AdminUserController {
           console.warn(`[Admin] Failed to delete avatar files:`, err.message);
         }
       }
-      deleteResults.avatars = await Avatar.destroy({ where: { user_id: id } });
+      deleteResults.avatars = await UserAvatar.destroy({ where: { user_id: id } });
 
       // 5. Delete multimedia files and memory nodes
       const multimediaItems = await MultimediaFile.findAll({ where: { user_id: id } });
