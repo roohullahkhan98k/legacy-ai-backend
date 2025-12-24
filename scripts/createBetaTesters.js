@@ -1,3 +1,4 @@
+require('dotenv').config();
 const { sequelize } = require('../common/database');
 const User = require('../common/models/User');
 const crypto = require('crypto');
