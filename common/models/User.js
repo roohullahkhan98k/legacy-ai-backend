@@ -52,12 +52,12 @@ const User = sequelize.define('User', {
     validate: {
       isValidPath(value) {
         if (!value) return; // Allow null/empty values
-        
+
         // Check if it's a valid URL
         const urlPattern = /^https?:\/\/.+/;
         // Check if it's a valid file path (starts with /uploads/)
         const filePathPattern = /^\/uploads\/.+/;
-        
+
         if (!urlPattern.test(value) && !filePathPattern.test(value)) {
           throw new Error('Profile picture must be a valid URL or file path starting with /uploads/');
         }
@@ -77,7 +77,7 @@ const User = sequelize.define('User', {
     allowNull: true
   },
   role: {
-    type: DataTypes.ENUM('user', 'admin', 'moderator'),
+    type: DataTypes.ENUM('user', 'admin', 'moderator', 'beta_tester'),
     defaultValue: 'user'
   },
   stripe_customer_id: {
@@ -108,26 +108,26 @@ const User = sequelize.define('User', {
 });
 
 // Instance methods
-User.prototype.validatePassword = async function(password) {
+User.prototype.validatePassword = async function (password) {
   return await bcrypt.compare(password, this.password);
 };
 
-User.prototype.toJSON = function() {
+User.prototype.toJSON = function () {
   const values = Object.assign({}, this.get());
   delete values.password;
   return values;
 };
 
 // Class methods
-User.findByEmail = function(email) {
+User.findByEmail = function (email) {
   return this.findOne({ where: { email } });
 };
 
-User.findByUsername = function(username) {
+User.findByUsername = function (username) {
   return this.findOne({ where: { username } });
 };
 
-User.findByEmailOrUsername = function(identifier) {
+User.findByEmailOrUsername = function (identifier) {
   return this.findOne({
     where: {
       [sequelize.Sequelize.Op.or]: [

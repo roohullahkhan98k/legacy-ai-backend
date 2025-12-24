@@ -1,0 +1,86 @@
+[
+  {
+    "email": "beta.tester.1.cee52517@legacyai.com",
+    "username": "beta_user_1_cee52517",
+    "password": "betaPassword123!",
+    "role": "beta_tester",
+    "id": "d04f4300-6e4f-46a9-aa8f-f1b7ea06b3d2"
+  },
+  {
+    "email": "beta.tester.2.e5912592@legacyai.com",
+    "username": "beta_user_2_e5912592",
+    "password": "betaPassword123!",
+    "role": "beta_tester",
+    "id": "347a686a-4648-45dd-bc9c-9e9f2262c4ea"
+  },
+  {
+    "email": "beta.tester.3.a3f5cd92@legacyai.com",
+    "username": "beta_user_3_a3f5cd92",
+    "password": "betaPassword123!",
+    "role": "beta_tester",
+    "id": "6704fa36-ce0d-4b11-9c69-1f015ad58258"
+  },
+  {
+    "email": "beta.tester.4.ce5e5b25@legacyai.com",
+    "username": "beta_user_4_ce5e5b25",
+    "password": "betaPassword123!",
+    "role": "beta_tester",
+    "id": "45a50a29-8fc8-42dd-a05d-4b36c1d3dd78"
+  },
+  {
+    "email": "beta.tester.5.98291bb3@legacyai.com",
+    "username": "beta_user_5_98291bb3",
+    "password": "betaPassword123!",
+    "role": "beta_tester",
+    "id": "65548414-1f92-41bf-a2bd-5e8814f4da18"
+  },
+  {
+    "email": "beta.tester.6.cf8fdd4e@legacyai.com",
+    "username": "beta_user_6_cf8fdd4e",
+    "password": "betaPassword123!",
+    "role": "beta_tester",
+    "id": "b9872777-8262-448a-a808-dca915bf6159"
+  },
+  {
+    "email": "beta.tester.7.ab91aaef@legacyai.com",
+    "username": "beta_user_7_ab91aaef",
+    "password": "betaPassword123!",
+    "role": "beta_tester",
+    "id": "b4ba4563-fe8a-485a-9f68-1bcfb221988e"
+  },
+  {
+    "email": "beta.tester.8.5d094c7f@legacyai.com",
+    "username": "beta_user_8_5d094c7f",
+    "password": "betaPassword123!",
+    "role": "beta_tester",
+    "id": "b7820575-32ea-45ef-b11a-8273099b7f51"
+  },
+  {
+    "email": "beta.tester.9.6c5498b6@legacyai.com",
+    "username": "beta_user_9_6c5498b6",
+    "password": "betaPassword123!",
+    "role": "beta_tester",
+    "id": "f73c9bad-dbec-4827-9088-61e9841a2395"
+  },
+  {
+    "email": "beta.tester.10.b0991155@legacyai.com",
+    "username": "beta_user_10_b0991155",
+    "password": "betaPassword123!",
+    "role": "beta_tester",
+    "id": "ea3884ed-cd9d-4b74-a221-99c356ed759a"
+  },
+  {
+    "email": "beta.tester.11.0b17bee4@legacyai.com",
+    "username": "beta_user_11_0b17bee4",
+    "password": "betaPassword123!",
+    "role": "beta_tester",
+    "id": "6a41e00d-50e6-4862-93f8-b0805839f608"
+  },
+  {
+    "email": "beta.tester.12.87a5a0a2@legacyai.com",
+    "username": "beta_user_12_87a5a0a2",
+    "password": "betaPassword123!",
+    "role": "beta_tester",
+    "id": "2fc45f25-5e58-43cc-84e2-83dd10fca087"
+  }
+]
