@@ -67,6 +67,12 @@ services:
       # OpenAI Configuration
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
+      # Email Configuration
+      - SMTP_HOST=sandbox.smtp.mailtrap.io
+      - SMTP_PORT=2525
+      - SMTP_USER=12ce089119f61d
+      - SMTP_PASS=3c7dcc8a031095
+      - SMTP_FROM=no-reply@example.com
     depends_on:
       - postgres
       - chromadb
