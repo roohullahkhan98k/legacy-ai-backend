@@ -68,7 +68,7 @@ build/
 *.sw?
 
 # Docker
-.dockerignore
+
 
 # Temporary files
 tmp/
