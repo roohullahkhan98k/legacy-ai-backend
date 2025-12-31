@@ -27,7 +27,8 @@
     "stripe": "^14.21.0",
     "uuid": "^13.0.0",
     "ws": "^8.18.2",
-    "nodemailer": "^6.9.7"
+    "nodemailer": "^6.9.7",
+    "express-rate-limit": "^7.1.5"
   },
   "scripts": {
     "chroma:up": "cd chromaDB && docker compose up -d",
