@@ -5,6 +5,6 @@ Dockerfile
 .git
 .gitignore
 uploads
-chromaDB
+
 *.md
 .env
